@@ -649,7 +649,7 @@ int main(int argc, char **argv) {
 
   int num_iter = 1000;
   if (argc > 2) {
-    num_iter = atoi(argv[3]);
+    num_iter = atoi(argv[2]);
   }
 
   printf("Input: %s\n", argv[1]);
