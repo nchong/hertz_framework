@@ -1,0 +1,10 @@
+CXX = g++
+CXXFLAGS = -O2
+
+NVCC = nvcc
+NVCCFLAGS = -arch=sm_13
+
+INCLUDEDIR = ../common
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -fpic -c $<
