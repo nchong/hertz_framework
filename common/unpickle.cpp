@@ -1,8 +1,10 @@
 #include "unpickle.h"
-#include <iostream>
 #include <fstream>
-#include <stdlib.h>
+#include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <vector>
 
 using namespace std;
 
@@ -99,6 +101,11 @@ struct params *parse_file(std::string fname) {
   fill_array(file, result->edge,  nedge*2);
   fill_array(file, result->shear, nedge*3);
 
+  //partition data (OP2 only)
+  //by default no partition data means we just use the unpickled edge ordering
+  result->npartition = 1;
+  result->partition_length = vector<int>(1, nedge);
+
   //expected results
   result->expected_force  = new double[nnode*3];
   result->expected_torque = new double[nnode*3];
@@ -108,4 +115,59 @@ struct params *parse_file(std::string fname) {
   fill_array(file, result->expected_shear, nedge*3);
 
   return result;
+}
+
+void parse_partition_file(struct params *input, string fname) {
+  ifstream file (fname.c_str(), ifstream::in);
+  if (!file.is_open()) {
+    cout << "Could not open [" << fname << "]" << endl;
+    exit(-1);
+  }
+  if (file.bad()) {
+    cout << "Error with file [" << fname << "]" << endl;
+    exit(-1);
+  }
+
+  //number of partitions
+  int npartition;
+  file >> npartition;
+  input->npartition = npartition;
+
+  //node_partition_map is a mapping from nodeid to partitionid
+  int *node_partition_map = new int[input->nnode];
+  fill_array(file, node_partition_map, input->nnode);
+
+  //edge_partition_map is a mapping from edgeid to partitionid
+  //we use the first node of an edge (part1) to determine an edge's partitionid
+  int *edge_partition_map = new int[input->nedge];
+  for (int i=0; i<input->nedge; i++) {
+    int part1 = node_partition_map[input->edge[(i*2)]];
+  //int part2 = node_partition_map[input->edge[(i*2)+1]];
+    edge_partition_map[i] = part1;
+  }
+
+  //create a new edge set
+  int *edge2 = new int[input->nedge*2];
+  int *partition_length = new int[npartition];
+  int ptr = 0;
+  for (int p=0; p<npartition; p++) {
+    int nedge_in_p = 0;
+    for (int e=0; e<input->nedge; e++) {
+      if (edge_partition_map[e] == p) {
+        edge2[ptr*2] = input->edge[e*2];
+        edge2[(ptr*2)+1] = input->edge[(e*2)+1];
+        ptr++;
+        nedge_in_p++;
+      }
+    }
+    partition_length[p] = nedge_in_p;
+  }
+
+  //copy new edge set over original input
+	memcpy(input->edge, edge2, sizeof(int)*input->nedge*2);
+
+  //partition_length is a mapping from partitionid to length (the number of
+  //*edges* in the partition)
+  input->partition_length =
+    vector<int>(partition_length, partition_length + npartition);
 }

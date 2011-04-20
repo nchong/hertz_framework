@@ -1,10 +1,11 @@
 #ifndef UNPICKLE_H
 #define UNPICKLE_H
 
+#include <assert.h>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <assert.h>
+#include <vector>
 
 //datastructure from serialized data (input and expected_output)
 struct params {
@@ -33,6 +34,10 @@ struct params {
   int *edge;
   double *shear;
 
+  //partition data (OP2 only)
+  int npartition;
+  std::vector<int> partition_length;
+
   //expected results
   double *expected_force;
   double *expected_torque;
@@ -46,5 +51,7 @@ template<class T>
 inline void fill_array(std::ifstream &file, T *array, int num_elements);
 
 struct params *parse_file(std::string fname);
+
+void parse_partition_file(struct params *input, std::string fname);
 
 #endif
