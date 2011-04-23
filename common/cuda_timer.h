@@ -7,14 +7,19 @@
 
 class SimpleTimer {
   public:
-    SimpleTimer() : _total_time(0.0f) {
+    SimpleTimer(std::string name="") : _total_time(0.0f), _name(name) {
       ASSERT_NO_CUDA_ERROR(cudaEventCreate(&start_event));
       ASSERT_NO_CUDA_ERROR(cudaEventCreate(&stop_event));
     }
-    SimpleTimer(std::string name) : _name(name) { SimpleTimer(); }
     ~SimpleTimer() {
       cudaEventDestroy(start_event);
       cudaEventDestroy(stop_event);
+    }
+    SimpleTimer(const SimpleTimer& t) {
+      _name = t._name;
+      _total_time = t._total_time;
+      ASSERT_NO_CUDA_ERROR(cudaEventCreate(&start_event));
+      ASSERT_NO_CUDA_ERROR(cudaEventCreate(&stop_event));
     }
 
     inline void start() {
