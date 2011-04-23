@@ -26,14 +26,10 @@
 
 #include "check_result_vector.h"
 #include "cuda_common.h"
+#include "framework.h"
 #include "hertz_constants.h"
 #include "inverse_map.h"
-#include "unpickle.h"
-#include <assert.h>
-#include <fstream>
-#include <iostream>
 #include <sstream>
-#include <string>
 
 using namespace std;
 
@@ -300,17 +296,9 @@ __global__ void gather_kernel(
 }
 
 // --------------------------------------------------------------------------
-// MAIN
+// RUN
 // --------------------------------------------------------------------------
 
-vector<SimpleTimer> one_time;
-vector<SimpleTimer> per_iter;
-
-/*
- * Run [num_iter] iterations of the hertz computation and return the total time
- * (in milliseconds) for the per-iteration cost. NB: the returned time does not
- * include one-time costs.
- */
 void run(struct params *input, int num_iter) {
 
   //--------------------
@@ -468,7 +456,6 @@ void run(struct params *input, int num_iter) {
   // Per-iteration costs
   //--------------------
 
-  double time = 0.0; //total time in milliseconds for num_iter iterations
   per_iter.push_back(SimpleTimer("AoS memcpy to dev"));
   per_iter.push_back(SimpleTimer("Pairwise kernel"));
   per_iter.push_back(SimpleTimer("Gather kernel"));
@@ -618,63 +605,4 @@ void run(struct params *input, int num_iter) {
   cudaFree(d_fake_x);
   cudaFree(d_fake_v);
   cudaFree(d_fake_omega);
-
-  //TIMING
-  for (int i=0; i<per_iter.size(); i++) {
-    time += per_iter[i].total_time();
-  }
-  return time;
-}
-
-// --------------------------------------------------------------------------
-// MAIN PROGRAM
-// --------------------------------------------------------------------------
-
-int main(int argc, char **argv) {
-  if (argc < 2) {
-    printf("Usage: %s <stepfile> [num_iterations]\n", argv[0]);
-    return(-1);
-  }
-
-  string step_filename(argv[1]);
-  struct params *p = parse_file(step_filename);
-
-  int num_iter = 1000;
-  if (argc > 2) {
-    num_iter = atoi(argv[2]);
-  }
-
-  printf("# Input: %s\n", argv[1]);
-  printf("# Num Iterations: %d\n", num_iter);
-#ifdef GPU_TIMER
-  printf("# GPU timer implementation\n");
-#else
-  printf("# CPU timer implementation\n");
-#endif
-
-  run(p, num_iter);
-
-  double one_time_total;
-  double per_iter_total;
-  printf("# nedge, total one-time cost, total per-iteration cost");
-  for (int i=0; i<one_time.size(); i++) {
-    printf(", %s", one_time[i].get_name().c_str());
-    one_time_total += one_time[i].total_time();
-  }
-  for (int i=0; i<per_iter.size(); i++) {
-    printf(", %s", per_iter[i].get_name().c_str());
-    per_iter_total += per_iter[i].total_time();
-  }
-  printf("\n");
-
-  printf("%d, %f, %f", p->nedge, one_time_total, per_iter_total / (double) num_iter);
-  for (int i=0; i<one_time.size(); i++) {
-    printf(", %f", one_time[i].total_time());
-  }
-  for (int i=0; i<per_iter.size(); i++) {
-    printf(", %f", per_iter[i].total_time() / (double) num_iter);
-  }
-  printf("\n");
-
-  return 0;
 }
