@@ -306,7 +306,7 @@ void run(struct params *input, int num_iter) {
   //--------------------
 
   //AoS generate
-  one_time.push_back(SimpleTimer("AoS generate"));
+  one_time.push_back(SimpleTimer("aos_gen"));
   one_time.back().start();
   struct contact *aos = new contact[input->nedge];
   for (int e=0; e<input->nedge; e++) {
@@ -357,7 +357,7 @@ void run(struct params *input, int num_iter) {
     cudaMemcpy(d_aos, aos, d_aos_size, cudaMemcpyHostToDevice));
   one_time.back().stop_and_add_to_total();
 
-  one_time.push_back(SimpleTimer("Malloc cuda datastructs"));
+  one_time.push_back(SimpleTimer("malloc_on_dev"));
   one_time.back().start();
   double3 *d_force_delta;
   double3 *d_torquei_delta;
@@ -386,7 +386,7 @@ void run(struct params *input, int num_iter) {
     cudaMemcpy(d_shear, input->shear, d_shear_size, cudaMemcpyHostToDevice));
   one_time.back().stop_and_add_to_total();
 
-  one_time.push_back(SimpleTimer("Build inverse map"));
+  one_time.push_back(SimpleTimer("inverse_map_build"));
   one_time.back().start();
   //inverse mappings for (i,j) particle pairs
   int *imap = new int[input->nedge];
@@ -456,10 +456,10 @@ void run(struct params *input, int num_iter) {
   // Per-iteration costs
   //--------------------
 
-  per_iter.push_back(SimpleTimer("AoS memcpy to dev"));
-  per_iter.push_back(SimpleTimer("Pairwise kernel"));
-  per_iter.push_back(SimpleTimer("Gather kernel"));
-  per_iter.push_back(SimpleTimer("Result fetch"));
+  per_iter.push_back(SimpleTimer("aos_memcpy_to_dev"));
+  per_iter.push_back(SimpleTimer("compute_kernel"));
+  per_iter.push_back(SimpleTimer("gather_kernel"));
+  per_iter.push_back(SimpleTimer("result_fetch"));
 
   for (int run=0; run<num_iter; run++) {
     //PREPROCESSING
