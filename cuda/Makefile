@@ -1,5 +1,7 @@
 include ../Makefile.common
 
+# NVCCFLAGS+=-g
+
 OBJ = inverse_map.o ../common/libcommon.so
 
 all: cuda_cpu_timer cuda_gpu_timer
