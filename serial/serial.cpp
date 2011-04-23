@@ -10,21 +10,20 @@
 #endif
 
 #include "check_result_vector.h"
+#include "framework.h"
 #include "hertz_constants.h"
-#include "unpickle.h"
-#include <assert.h>
-#include <cstdio>
-#include <iostream>
 #include <math.h>
 #include <sstream>
-#include <stdlib.h>
 
 using namespace std;
 
-double run(struct params *input, int num_iter) {
+void run(struct params *input, int num_iter) {
 
-  SimpleTimer timers[8];
-  timers[0].set_name("Kernel");
+  //--------------------
+  // Per-iteration costs
+  //--------------------
+
+  per_iter.push_back(SimpleTimer("kernel"));
 
   for (int run=0; run<num_iter; run++) {
 
@@ -49,14 +48,10 @@ double run(struct params *input, int num_iter) {
     double betaeff = -0.3578571305033167;
     double coeffFrict = 0.5;
 
-    timers[0].start();
+    per_iter[0].start();
     for (int e=0; e<input->nedge; e++) {
       int i = input->edge[(e*2)];
       int j = input->edge[(e*2)+1];
-      assert(i < input->nnode);
-      assert(j < input->nnode);
-      assert(i > -1);
-      assert(j > -1);
 
       double delx = input->x[(i*3)  ] - input->x[(j*3)  ];
       double dely = input->x[(i*3)+1] - input->x[(j*3)+1];
@@ -198,7 +193,7 @@ double run(struct params *input, int num_iter) {
         torque[(j*3)+2] -= input->radius[j]*tor3;
       }
     }
-    timers[0].stop_and_add_to_total();
+    per_iter[0].stop_and_add_to_total();
 
     //only check results the first time around
     if (run == 0) {
@@ -225,39 +220,4 @@ double run(struct params *input, int num_iter) {
     }
 
   }
-
-  return timers[0].total_time();
-}
-
-// --------------------------------------------------------------------------
-// MAIN PROGRAM
-// --------------------------------------------------------------------------
-
-int main(int argc, char **argv) {
-  if (argc < 2) {
-    printf("Usage: %s <stepfile> [num_iterations]\n", argv[0]);
-    return(-1);
-  }
-
-  string step_filename(argv[1]);
-  struct params *p = parse_file(step_filename);
-
-  int num_iter = 1000;
-  if (argc > 2) {
-    num_iter = atoi(argv[2]);
-  }
-
-  printf("Input: %s\n", argv[1]);
-  printf("Num Iterations: %d\n", num_iter);
-#ifdef GPU_TIMER
-  printf("GPU timer implementation\n");
-#else
-  printf("CPU timer implementation\n");
-#endif
-
-  double time = run(p, num_iter);
-  printf("Total time(ms): %f\n", time);
-  printf("Time per iteration(ms): %f\n", (time/num_iter));
-
-  return(0);
 }
