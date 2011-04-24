@@ -28,7 +28,7 @@ int rand_int(int n) {
 
 }
 
-/* randomly shuffle the contact list (an array of pairs) */
+/* randomly shuffle the contact list (array of pairs) */
 void shuffle_edges(int *edges, int nedge) {
   int i, j, n0, n1;
 
@@ -49,68 +49,124 @@ void shuffle_edges(int *edges, int nedge) {
  */
 extern void run(struct params *input, int num_iter);
 
-int main(int argc, char **argv) {
-  if (argc < 2) {
-    printf("Usage: %s <step_file> [num_iterations] [partition_file]\n", argv[0]);
-    return(-1);
-  }
+void print_usage(std::string progname) {
+  printf("Usage: %s <stepfile> [options]\n", progname.c_str());
+  printf("Options:\n");
+  printf("   -n arg     number of runs\n");
+  printf("   -v         be verbose\n");
+  printf("   -p arg     use partition file\n");
+  printf("   -s arg     set seed for edge shuffle\n");
+}
 
+int main(int argc, char **argv) {
+
+  // PARSE CMDLINE
+  std::string progname(argv[0]);
+
+  // mandatory arguments
+  if (argc < 2) {
+    print_usage(progname);
+    return(1);
+  }
   std::string step_filename(argv[1]);
   struct params *p = parse_file(step_filename);
+  argc--;
+  argv++;
 
+  // optional arguments
+  bool debug = false;
+  bool verbose = false;
   int num_iter = 1000;
-  if (argc > 2) {
-    num_iter = atoi(argv[2]);
-  }
+  std::string part_filename;
+  long seed = -1;
 
-  std::string partition_filename("");
-  if (argc > 3) {
-    partition_filename = argv[3];
-    if (partition_filename != "none") {
-      parse_partition_file(p, partition_filename);
+  int c;
+  while ((c = getopt (argc, argv, "hdvn:p:s:")) != -1) {
+    switch (c) {
+      case 'h':
+        print_usage(progname);
+        return 1;
+      case 'd':
+        debug = true;
+        break;
+      case 'v':
+        verbose = true;
+        break;
+      case 'n':
+        num_iter = atoi(optarg);
+        break;
+      case 'p':
+        part_filename = optarg;
+        parse_partition_file(p, part_filename);
+        break;
+      case 's':
+        seed = atol(optarg);
+        srandom(seed);
+        shuffle_edges(p->edge, p->nedge);
+        break;
+      case '?':
+        if (optopt == 'n' || optopt == 'p' || optopt == 's')
+          fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+        else if (isprint (optopt))
+          fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+        else
+          fprintf (stderr,
+              "Unknown option character `\\x%x'.\n",
+              optopt);
+        return 1;
+      default:
+        abort ();
     }
   }
 
-  long seed = -1;
-  if (argc > 4) {
-    seed = atol(argv[4]);
-    srandom(seed);
-    shuffle_edges(p->edge, p->nedge);
+  if (debug) {
+    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld\n",
+        step_filename.c_str(), verbose, num_iter, part_filename.c_str(), seed);
+    for (int i=optind; i<argc; i++)
+      printf ("# Non-option argument: %s\n", argv[i]);
   }
 
-  printf("# Program: %s\n", argv[0]);
-  printf("# Num Iterations: %d\n", num_iter);
-  if (p->npartition > 1) {
-    printf("# Partition: %s\n", partition_filename.c_str());
-    printf("# npartition: %d\n", p->npartition);
-  }
-  if (seed != -1) {
-    printf("# Shuffle seed: %ld\n", seed);
-  }
+  if (verbose) {
+    printf("# Program: %s\n", progname.c_str());
+    printf("# Num Iterations: %d\n", num_iter);
+    if (p->npartition > 1) {
+      printf("# Partition: %s\n", part_filename.c_str());
+      printf("# npartition: %d\n", p->npartition);
+    }
+    if (seed != -1) {
+      printf("# Shuffle seed: %ld\n", seed);
+    }
 #ifdef GPU_TIMER
-  printf("# GPU timer implementation\n");
+    printf("# GPU timer implementation\n");
 #else
-  printf("# CPU timer implementation\n");
+    printf("# CPU timer implementation\n");
 #endif
+  }
 
+  // RUN TEST
   run(p, num_iter);
-
-  // print header
-  double one_time_total = 0.0;
-  double per_iter_total = 0.0;
-  printf("# nedge, total_one_time_cost (milliseconds), time_per_iteration");
+  double one_time_total = 0.0f;
+  double per_iter_total = 0.0f;
   for (int i=0; i<one_time.size(); i++) {
-    printf(", [%s]", one_time[i].get_name().c_str());
     one_time_total += one_time[i].total_time();
   }
   for (int i=0; i<per_iter.size(); i++) {
-    printf(", %s", per_iter[i].get_name().c_str());
     per_iter_total += per_iter[i].total_time();
   }
-  if (seed != -1) {
-    printf(", seed");
+
+  if (verbose) { //then print header
+    printf("# nedge, total_one_time_cost (milliseconds), time_per_iteration");
+    for (int i=0; i<one_time.size(); i++) {
+      printf(", [%s]", one_time[i].get_name().c_str());
+    }
+    for (int i=0; i<per_iter.size(); i++) {
+      printf(", %s", per_iter[i].get_name().c_str());
+    }
+    if (seed != -1) {
+      printf(", seed");
+    }
+    printf("\n");
   }
-  printf("\n");
 
   // print runtime data
   printf("%d, %f, %f", p->nedge, one_time_total, per_iter_total / (double) num_iter);
@@ -125,6 +181,7 @@ int main(int argc, char **argv) {
   }
   printf("\n");
 
-  return(0);
+  return 0;
+
 }
 #endif
