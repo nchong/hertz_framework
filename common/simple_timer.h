@@ -38,6 +38,7 @@ class SimpleTimer {
     inline void reset() { _total_time = 0.0; };
     inline std::string get_name() { return _name; };
     inline void set_name(const char *s) { _name.assign(s); };
+    inline void set_total_time(double t) { _total_time = t; };
 
   private:
     std::string _name;
