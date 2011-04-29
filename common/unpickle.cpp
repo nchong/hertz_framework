@@ -154,7 +154,7 @@ void parse_partition_file(struct params *input, string fname) {
     int nedge_in_p = 0;
     for (int e=0; e<input->nedge; e++) {
       if (edge_partition_map[e] == p) {
-        edge2[ptr*2] = input->edge[e*2];
+        edge2[(ptr*2)  ] = input->edge[(e*2)  ];
         edge2[(ptr*2)+1] = input->edge[(e*2)+1];
         ptr++;
         nedge_in_p++;
@@ -165,6 +165,30 @@ void parse_partition_file(struct params *input, string fname) {
 
   //copy new edge set over original input
 	memcpy(input->edge, edge2, sizeof(int)*input->nedge*2);
+
+  //create a new shear set
+  double *shear2 = new double[input->nedge*3];
+  double *expected_shear2 = new double[input->nedge*3];
+  ptr = 0;
+  for (int p=0; p<npartition; p++) {
+    for (int e=0; e<input->nedge; e++) {
+      if (edge_partition_map[e] == p) {
+        shear2[(ptr*3)  ] = input->shear[(e*3)  ];
+        shear2[(ptr*3)+1] = input->shear[(e*3)+1];
+        shear2[(ptr*3)+2] = input->shear[(e*3)+2];
+
+        expected_shear2[(ptr*3)  ] = input->expected_shear[(e*3)  ];
+        expected_shear2[(ptr*3)+1] = input->expected_shear[(e*3)+1];
+        expected_shear2[(ptr*3)+2] = input->expected_shear[(e*3)+2];
+
+        ptr++;
+      }
+    }
+  }
+
+  //copy new shear set over original input
+	memcpy(input->shear, shear2, sizeof(double)*input->nedge*3);
+	memcpy(input->expected_shear, expected_shear2, sizeof(double)*input->nedge*3);
 
   //partition_length is a mapping from partitionid to length (the number of
   //*edges* in the partition)
