@@ -13,4 +13,4 @@ cuda_gpu_timer: cuda.cu $(OBJ)
 	$(NVCC) $(NVCCFLAGS) -D GPU_TIMER -I $(INCLUDEDIR) $^ -o $@
 
 clean:
-	rm -f inverse_map.o cuda_cpu_timer cuda_gpu_timer
+	rm -f inverse_map.o cuda_cpu_timer cuda_gpu_timer *.log
