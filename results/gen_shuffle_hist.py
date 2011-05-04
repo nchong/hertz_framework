@@ -22,7 +22,7 @@ no_part = op2_data['compute_kernel'][-1]
 print "no_part = %f\n" % no_part
 
 data = np.loadtxt(
-    "op2_shuffle.data", 
+    "shuffle.data", 
     comments='#', 
     dtype=[('nedge', 'float'),
            ('one_time_total','float'), 
