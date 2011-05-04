@@ -5,6 +5,8 @@
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"
+#elif POSIX_TIMER
+  #include "posix_timer.h"
 #else
   #include "simple_timer.h"
 #endif
