@@ -513,6 +513,7 @@ void run(struct params *input, int num_iter) {
       input->nedge,
       d_aos,
       d_force_delta, d_torquei_delta, d_torquej_delta, d_shear);
+    cudaThreadSynchronize();
     per_iter[1].stop_and_add_to_total();
 
     err = cudaGetLastError();
@@ -530,6 +531,7 @@ void run(struct params *input, int num_iter) {
       d_ioffset, d_icount, d_imapinv,
       d_joffset, d_jcount, d_jmapinv,
       d_force, d_torque);
+    cudaThreadSynchronize();
     per_iter[2].stop_and_add_to_total();
 
     err = cudaGetLastError();
