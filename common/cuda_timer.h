@@ -31,6 +31,7 @@ class SimpleTimer {
     inline void add_to_total() { _total_time+=time(); }
     inline double time() { 
       float timer;
+      cudaThreadSynchronize();
       cudaEventSynchronize(stop_event);
       ASSERT_NO_CUDA_ERROR(
         cudaEventElapsedTime(&timer,start_event,stop_event));
