@@ -138,6 +138,8 @@ int main(int argc, char **argv) {
     }
 #ifdef GPU_TIMER
     printf("# GPU timer implementation\n");
+#elif POSIX_TIMER
+    printf("# POSIX timer implementation\n");
 #else
     printf("# CPU timer implementation\n");
 #endif
