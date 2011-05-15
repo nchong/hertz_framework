@@ -8,7 +8,10 @@ fi
 if [ -z "${PROGRAM}" ]; then
   PROGRAM=./serial_cpu_timer
 fi
-NUMITER=1000
+
+if [ -z "${NUMITER}" ]; then
+  NUMITER=1000
+fi
 
 if [ -z "${OUTPUT}" ]; then
   OUTPUT=serial.data
