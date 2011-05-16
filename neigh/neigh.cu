@@ -1,9 +1,11 @@
 /*
- * Neighbor list decomposition of the hertz pairwise kernel. 
+ * Neighbor list decomposition of the hertz pairwise kernel.
  */
 
 #define NSLOT 32
 //#define KERNEL_PRINT    //< debug printing in kernel
+//#define NEWTON_THIRD    //< use Newton's third law to halve computation
+//#define COMPUTE_TPA     //< thread-per-atom decomposition
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"
@@ -168,7 +170,7 @@ __device__ void pair_interaction(
 }
 
 __global__ void compute_kernel_tpa(
-  int nparticles,   
+  int nparticles,
   struct particle *particle_aos,
   int *numneigh,
   struct particle *neigh,
@@ -244,6 +246,112 @@ __global__ void compute_kernel_tpa(
   }
 }
 
+//NB: expects blockDim.x >= NSLOT
+//    this kernel will produce incorrect results if blockDim.x < NSLOT
+__global__ void compute_kernel_bpa(
+  int nparticles,
+  struct particle *particle_aos,
+  int *numneigh,
+  struct particle *neigh,
+  double3 *shear,
+  double *force,
+  double *torque) {
+
+  __shared__ double ftmp[NSLOT*3];
+  __shared__ double ttmp[NSLOT*3];
+
+  int jj = threadIdx.x;
+  int idx = blockIdx.x;
+  if (idx < nparticles && jj < numneigh[idx]) {
+    double xi[3]; double xj[3];
+    double vi[3]; double vj[3];
+    double omegai[3]; double omegaj[3];
+    double radiusi; double radiusj;
+    double massi; double massj;
+    int    typei; int typej;
+    double shearij[3] = {0,0,0};
+    double force_deltai[3] = {0,0,0};
+    double torque_deltai[3] = {0,0,0};
+
+    xi[0]     = particle_aos[idx].x[0];
+    xi[1]     = particle_aos[idx].x[1];
+    xi[2]     = particle_aos[idx].x[2];
+    vi[0]     = particle_aos[idx].v[0];
+    vi[1]     = particle_aos[idx].v[1];
+    vi[2]     = particle_aos[idx].v[2];
+    omegai[0] = particle_aos[idx].omega[0];
+    omegai[1] = particle_aos[idx].omega[1];
+    omegai[2] = particle_aos[idx].omega[2];
+    radiusi   = particle_aos[idx].radius;
+    massi     = particle_aos[idx].mass;
+    typei     = particle_aos[idx].type;
+
+    int neigh_idx = (idx*NSLOT)+jj;
+    //int j   = neigh[neigh_idx].idx;
+    xj[0]     = neigh[neigh_idx].x[0];
+    xj[1]     = neigh[neigh_idx].x[1];
+    xj[2]     = neigh[neigh_idx].x[2];
+    vj[0]     = neigh[neigh_idx].v[0];
+    vj[1]     = neigh[neigh_idx].v[1];
+    vj[2]     = neigh[neigh_idx].v[2];
+    omegaj[0] = neigh[neigh_idx].omega[0];
+    omegaj[1] = neigh[neigh_idx].omega[1];
+    omegaj[2] = neigh[neigh_idx].omega[2];
+    radiusj   = neigh[neigh_idx].radius;
+    massj     = neigh[neigh_idx].mass;
+    typej     = neigh[neigh_idx].type;
+
+    shearij[0] = shear[neigh_idx].x;
+    shearij[1] = shear[neigh_idx].y;
+    shearij[2] = shear[neigh_idx].z;
+
+    pair_interaction(
+      xi, xj,
+      vi, vj,
+      omegai, omegaj,
+      radiusi, radiusj,
+      massi, massj,
+      typei, typej,
+      shearij, torque_deltai, force_deltai);
+
+    shear[neigh_idx].x = shearij[0];
+    shear[neigh_idx].y = shearij[1];
+    shear[neigh_idx].z = shearij[2];
+
+    ftmp[(jj*3)  ] = force_deltai[0];
+    ftmp[(jj*3)+1] = force_deltai[1];
+    ftmp[(jj*3)+2] = force_deltai[2];
+
+    ttmp[(jj*3)  ] = torque_deltai[0];
+    ttmp[(jj*3)+1] = torque_deltai[1];
+    ttmp[(jj*3)+2] = torque_deltai[2];
+
+    __syncthreads();
+
+    //reduce
+    if (jj == 0) {
+      //serial reduce
+      for (int i=1; i<numneigh[idx]; i++) {
+        force_deltai[0] += ftmp[(i*3)  ];
+        force_deltai[1] += ftmp[(i*3)+1];
+        force_deltai[2] += ftmp[(i*3)+2];
+
+        torque_deltai[0] += ttmp[(i*3)  ];
+        torque_deltai[1] += ttmp[(i*3)+1];
+        torque_deltai[2] += ttmp[(i*3)+2];
+      }
+
+      force[(idx*3)  ] += force_deltai[0];
+      force[(idx*3)+1] += force_deltai[1];
+      force[(idx*3)+2] += force_deltai[2];
+
+      torque[(idx*3)  ] += torque_deltai[0];
+      torque[(idx*3)+1] += torque_deltai[1];
+      torque[(idx*3)+2] += torque_deltai[2];
+    }
+  }
+}
+
 // --------------------------------------------------------------------------
 // RUN
 // --------------------------------------------------------------------------
@@ -279,7 +387,7 @@ void build_particle_aos(struct params *input, struct particle *&d_particle_aos) 
 
 void build_neighbor_list(
   int nslot,
-  struct params *input, 
+  struct params *input,
   int *&d_numneigh, struct particle *&d_neigh, double3 *&d_shear) {
 
   int *numneigh = new int[input->nnode*nslot];
@@ -368,52 +476,119 @@ void run(struct params *input, int num_iter) {
     cudaMalloc((void **)&d_torque, torque_size));
   one_time.back().stop_and_add_to_total();
 
-  per_iter.push_back(SimpleTimer("compute_kernel"));
+  //TODO(1): copy real x, v, omega in PREPROCESS
+  //These are dummy structures just for timing
+  const int d_x_size = input->nnode * 3 * sizeof(double);
+  double *d_fake_x;
+  double *d_fake_v;
+  double *d_fake_omega;
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_fake_x, d_x_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_fake_v, d_x_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_fake_omega, d_x_size));
+
+  //--------------------
+  // Per-iteration costs
+  //--------------------
+
+  per_iter.push_back(SimpleTimer("memcpy_to_dev"));
+#ifdef COMPUTE_TPA
+  per_iter.push_back(SimpleTimer("compute_kernel_tpa"));
+#else
+  per_iter.push_back(SimpleTimer("compute_kernel_bpa"));
+#endif
+  per_iter.push_back(SimpleTimer("result_fetch"));
+
+  double3 *shear_result = new double3[input->nnode*NSLOT];
+  double *force_result = new double[input->nnode*3];
+  double *torque_result = new double[input->nnode*3];
+
   for (int run=0; run<num_iter; run++) {
+    //PREPROCESSING
+    //copy across structures that change between kernel invocations,
+    //TODO(1): just copy dummy structures for timing
+    per_iter[0].start();
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_x, input->x, d_x_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_v, input->v, d_x_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_omega, input->omega, d_x_size, cudaMemcpyHostToDevice));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(d_force, input->force, force_size, cudaMemcpyHostToDevice));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(d_torque, input->torque, torque_size, cudaMemcpyHostToDevice));
+    per_iter[0].stop_and_add_to_total();
+
+    //KERNEL INVOCATION
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
       printf("Pre-compute-kernel error: %s.\n", cudaGetErrorString(err));
       exit(1);
     }
+
+#ifdef KERNEL_PRINT
+    cudaPrintfInit();
+#endif
+    per_iter[1].start();
+#ifdef COMPUTE_TPA
     const int blockSize = 128;
     dim3 gridSize((input->nnode / blockSize)+1);
-    per_iter[0].start();
     compute_kernel_tpa<<<gridSize, blockSize>>>(
-      input->nnode, d_particle_aos, d_numneigh, d_neigh, 
+      input->nnode, d_particle_aos, d_numneigh, d_neigh,
       d_shear, d_force, d_torque);
+#else
+    const int blockSize = NSLOT;
+    dim3 gridSize(input->nnode);
+    compute_kernel_bpa<<<gridSize, blockSize>>>(
+      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      d_shear, d_force, d_torque);
+#endif
     cudaThreadSynchronize();
-    per_iter[0].stop_and_add_to_total();
+    per_iter[1].stop_and_add_to_total();
+
     err = cudaGetLastError();
     if (err != cudaSuccess) {
       printf("Post-compute-kernel error: %s.\n", cudaGetErrorString(err));
       exit(1);
     }
 
-#if 0
-    double *force_result = new double[input->nnode*3];
-    double *torque_result = new double[input->nnode*3];
+#ifdef KERNEL_PRINT
+    cudaPrintfDisplay(stdout, true);
+    cudaPrintfEnd();
+#endif
+
+    //-----------------------------------------------------------------------
+    //POSTPROCESSING
+    //memcpy data back to host
+    const int shear_size = input->nnode*NSLOT*sizeof(double3);
+    per_iter[2].start();
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(shear_result, d_shear, shear_size, cudaMemcpyDeviceToHost));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(force_result, d_force, force_size, cudaMemcpyDeviceToHost));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(torque_result, d_torque, torque_size, cudaMemcpyDeviceToHost));
-    for (int n=0; n<input->nnode; n++) {
-      const double epsilon=0.00001;
+    per_iter[2].stop_and_add_to_total();
 
-      std::stringstream out;
-      out << "force[" << n << "]";
-      check_result_vector(
-          out.str().c_str(),
-          &input->expected_force[(n*3)], &force_result[(n*3)], epsilon, false, false);
-      out.str("");
+#if 0
+    if (run == 0) {
+      for (int n=0; n<input->nnode; n++) {
+        std::stringstream out;
+        out << "force[" << n << "]";
+        check_result_vector(
+            out.str().c_str(),
+            &input->expected_force[(n*3)], &force_result[(n*3)]);
+        out.str("");
 
-      out << "torque[" << n << "]";
-      check_result_vector(
-          out.str().c_str(),
-          &input->expected_torque[(n*3)], &torque_result[(n*3)], epsilon, false, false);
+        out << "torque[" << n << "]";
+        check_result_vector(
+            out.str().c_str(),
+            &input->expected_torque[(n*3)], &torque_result[(n*3)]);
+      }
+      //TODO check shear
     }
 #endif
   }

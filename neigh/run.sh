@@ -6,7 +6,7 @@ if [ -z "${DATADIR}" ]; then
 fi
 
 if [ -z "${PROGRAM}" ]; then
-  PROGRAM=./neigh_cpu_timer
+  PROGRAM=./neigh_tpa_cpu_timer
 fi
 
 if [ -z "${NUMITER}" ]; then
