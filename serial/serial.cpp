@@ -42,7 +42,6 @@ void run(struct params *input, int num_iter) {
       shear[e] = input->shear[e];
     }
 
-    //TODO: don't hardcode, push these into constant memory
     double dt = 0.00001;
     double nktv2p = 1;
     double yeff = 3134796.2382445144467056;
