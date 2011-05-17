@@ -3,6 +3,7 @@ CXXFLAGS = -O2
 
 NVCC = nvcc
 NVCCFLAGS = -arch=sm_13 #-O2
+NVCCFLAGS += ${CMDLINE_NVCCFLAGS}
 
 INCLUDEDIR = ../common
 
