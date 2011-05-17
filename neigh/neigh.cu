@@ -618,7 +618,6 @@ void run(struct params *input, int num_iter) {
   int *d_numneigh = NULL;
   struct particle *d_neigh = NULL;
   double3 *d_shear = NULL;
-  one_time.back().start();
 #ifdef NEWTON_THIRD
   int delta_size;
   double3 *d_fdelta = NULL;
@@ -626,18 +625,21 @@ void run(struct params *input, int num_iter) {
   int *d_joffset = NULL;
   int *d_jcount = NULL;
   int *d_jmapinv = NULL;
+  one_time.back().start();
   build_neighbor_list(NSLOT, input, d_numneigh, d_neigh, d_shear,
     delta_size, d_fdelta, d_tdeltaj,
     d_joffset, d_jcount, d_jmapinv);
+  one_time.back().stop_and_add_to_total();
   assert(d_fdelta);
   assert(d_tdeltaj);
   assert(d_joffset);
   assert(d_jcount);
   assert(d_jmapinv);
 #else
+  one_time.back().start();
   build_neighbor_list(NSLOT, input, d_numneigh, d_neigh, d_shear);
-#endif
   one_time.back().stop_and_add_to_total();
+#endif
   assert(d_numneigh);
   assert(d_neigh);
   assert(d_shear);
@@ -874,10 +876,30 @@ void run(struct params *input, int num_iter) {
 #endif
   }
 
+#ifdef PINNED_MEM
+  cudaFreeHost(h_x);
+  cudaFreeHost(h_v);
+  cudaFreeHost(h_omega);
+  cudaFreeHost(h_force);
+  cudaFreeHost(h_torque);
+  cudaFreeHost(shear_result);
+  cudaFreeHost(force_result);
+  cudaFreeHost(torque_result);
+#endif
+#ifdef NEWTON_THIRD
+  cudaFree(d_joffset);
+  cudaFree(d_jcount);
+  cudaFree(d_jmapinv);
+  cudaFree(d_fdelta);
+  cudaFree(d_tdeltaj);
+#endif
   cudaFree(d_particle_aos);
   cudaFree(d_numneigh);
   cudaFree(d_neigh);
   cudaFree(d_shear);
   cudaFree(d_force);
   cudaFree(d_torque);
+  cudaFree(d_fake_x);
+  cudaFree(d_fake_v);
+  cudaFree(d_fake_omega);
 }
