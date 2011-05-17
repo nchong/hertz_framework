@@ -548,7 +548,6 @@ void run(struct params *input, int num_iter) {
       exit(1);
     }
 
-    cudaThreadSynchronize();
 #ifdef KERNEL_PRINT
     cudaPrintfDisplay(stdout, true);
     cudaPrintfEnd();
