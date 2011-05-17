@@ -28,4 +28,16 @@ void build_inverse_map(
   int *map, int N, int K,                 //inputs
   int *&offset, int *&count, int*&imap);  //outputs
 
+/*
+ * Same as build_inverse_map but given a *sparse* map as input.
+ *
+ * map_count[T], map[N] define a sparse map from the set 
+ * {0..(N-1)} to {0..(K-1)}
+ * where N=T*nslot
+ *
+ */
+void build_inverse_map(
+  int *map_count, int *map, int T, int nslot, int K,  //inputs
+  int *&offset, int *&count, int*&imap);              //outputs
+
 #endif

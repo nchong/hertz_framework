@@ -307,6 +307,12 @@ void run(struct params *input, int num_iter) {
   // One-time only costs
   //--------------------
 
+  //Hertz constants
+  one_time.push_back(SimpleTimer("hertz_consts"));
+  one_time.back().start();
+  setup_hertz_constants();
+  one_time.back().stop_and_add_to_total();
+
   //AoS generate
   one_time.push_back(SimpleTimer("aos_gen"));
   one_time.back().start();
