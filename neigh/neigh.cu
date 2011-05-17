@@ -2,10 +2,11 @@
  * Neighbor list decomposition of the hertz pairwise kernel.
  */
 
-#define NSLOT 32
+#define NSLOT 32          //< maximum number of neighbors per particle
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define NEWTON_THIRD    //< use Newton's third law to halve computation
 //#define COMPUTE_TPA     //< thread-per-atom decomposition
+//#define PINNED_MEM      //< use pinned-memory for kernel output
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"
@@ -439,7 +440,15 @@ void build_neighbor_list(
     cudaMemcpy(d_shear, shear, shear_size, cudaMemcpyHostToDevice));
 }
 
+// --------------------------------------------------------------------------
+// RUN
+// --------------------------------------------------------------------------
+
 void run(struct params *input, int num_iter) {
+
+  //--------------------
+  // One-time only costs
+  //--------------------
   one_time.push_back(SimpleTimer("hertz_constants"));
   one_time.back().start();
   setup_hertz_constants();
@@ -489,6 +498,37 @@ void run(struct params *input, int num_iter) {
   ASSERT_NO_CUDA_ERROR(
     cudaMalloc((void **)&d_fake_omega, d_x_size));
 
+#ifdef PINNED_MEM
+  one_time.push_back(SimpleTimer("pinned_mem"));
+  one_time.back().start();
+  double *h_x;
+  double *h_v;
+  double *h_omega;
+  double *h_force;
+  double *h_torque;
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&h_x, d_x_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&h_v, d_x_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&h_omega, d_x_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&h_force, force_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&h_torque, torque_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(h_x, input->x, d_x_size, cudaMemcpyHostToHost));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(h_v, input->v, d_x_size, cudaMemcpyHostToHost));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(h_omega, input->omega, d_x_size, cudaMemcpyHostToHost));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(h_force, input->force, force_size, cudaMemcpyHostToHost));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(h_torque, input->torque, torque_size, cudaMemcpyHostToHost));
+  one_time.back().stop_and_add_to_total();
+#endif
+
   //--------------------
   // Per-iteration costs
   //--------------------
@@ -501,15 +541,39 @@ void run(struct params *input, int num_iter) {
 #endif
   per_iter.push_back(SimpleTimer("result_fetch"));
 
+#ifdef PINNED_MEM
+  double3 *shear_result;
+  double *force_result;
+  double *torque_result;
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&shear_result, input->nnode*NSLOT*sizeof(double3)));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&force_result, input->nnode*3*sizeof(double)));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMallocHost((void **)&torque_result, input->nnode*3*sizeof(double)));
+#else
   double3 *shear_result = new double3[input->nnode*NSLOT];
   double *force_result = new double[input->nnode*3];
   double *torque_result = new double[input->nnode*3];
+#endif
 
   for (int run=0; run<num_iter; run++) {
     //PREPROCESSING
     //copy across structures that change between kernel invocations,
     //TODO(1): just copy dummy structures for timing
     per_iter[0].start();
+#ifdef PINNED_MEM
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_x, h_x, d_x_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_v, h_v, d_x_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_fake_omega, h_omega, d_x_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_force, h_force, force_size, cudaMemcpyHostToDevice));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemcpy(d_torque, h_torque, torque_size, cudaMemcpyHostToDevice));
+#else
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(d_fake_x, input->x, d_x_size, cudaMemcpyHostToDevice));
     ASSERT_NO_CUDA_ERROR(
@@ -520,7 +584,10 @@ void run(struct params *input, int num_iter) {
       cudaMemcpy(d_force, input->force, force_size, cudaMemcpyHostToDevice));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(d_torque, input->torque, torque_size, cudaMemcpyHostToDevice));
+#endif
     per_iter[0].stop_and_add_to_total();
+
+    //-----------------------------------------------------------------------
 
     //KERNEL INVOCATION
     cudaError_t err = cudaGetLastError();
@@ -561,6 +628,7 @@ void run(struct params *input, int num_iter) {
 #endif
 
     //-----------------------------------------------------------------------
+
     //POSTPROCESSING
     //memcpy data back to host
     const int shear_size = input->nnode*NSLOT*sizeof(double3);
