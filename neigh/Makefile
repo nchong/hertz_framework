@@ -1,7 +1,5 @@
 include ../Makefile.common
 
-# NVCCFLAGS+=-g
-
 OBJ = ../common/libcommon.so
 
 all: neigh_bpa_cpu_timer neigh_bpa_gpu_timer neigh_bpa_posix_timer neigh_tpa_cpu_timer neigh_tpa_gpu_timer neigh_tpa_posix_timer

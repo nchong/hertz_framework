@@ -4,6 +4,7 @@
 
 #define NSLOT 32          //< maximum number of neighbors per particle
 //#define KERNEL_PRINT    //< debug printing in kernel
+//#define MAP_BUILD_CHECK //< bounds and sanity checking in build_inverse_map
 //#define NEWTON_THIRD    //< use Newton's third law to halve computation
 //#define COMPUTE_TPA     //< thread-per-atom decomposition
 //#define PINNED_MEM      //< use pinned-memory for kernel output
@@ -20,6 +21,7 @@
 #include "cuda_common.h"
 #include "framework.h"
 #include "hertz_constants.h"
+#include "inverse_map.h"
 #include "particle.h"
 #include <sstream>
 
@@ -40,7 +42,11 @@ __device__ void pair_interaction(
   //inouts
     double *shear,
     double *torque,
-    double *force) {
+    double *force
+#ifdef NEWTON_THIRD
+    , double *torquej
+#endif
+  ) {
 
   // del is the vector from j to i
   double delx = xi[0] - xj[0];
@@ -167,6 +173,12 @@ __device__ void pair_interaction(
     torque[0] -= radi*tor1;
     torque[1] -= radi*tor2;
     torque[2] -= radi*tor3;
+
+#ifdef NEWTON_THIRD
+    torquej[0] -= radj*tor1;
+    torquej[1] -= radj*tor2;
+    torquej[2] -= radj*tor3;
+#endif
   }
 }
 
@@ -177,7 +189,13 @@ __global__ void compute_kernel_tpa(
   struct particle *neigh,
   double3 *shear,
   double *force,
-  double *torque) {
+  double *torque
+#ifdef NEWTON_THIRD
+  ,
+  double3 *fdelta,
+  double3 *tdeltaj
+#endif
+  ) {
 
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < nparticles && numneigh[idx] > 0) {
@@ -224,6 +242,25 @@ __global__ void compute_kernel_tpa(
       shearij[1] = shear[neigh_idx].y;
       shearij[2] = shear[neigh_idx].z;
 
+#ifdef NEWTON_THIRD
+      double torque_deltaj[3] = {0,0,0};
+      pair_interaction(
+        xi, xj,
+        vi, vj,
+        omegai, omegaj,
+        radiusi, radiusj,
+        massi, massj,
+        typei, typej,
+        shearij, torque_deltai, force_deltai, torque_deltaj);
+
+      fdelta[neigh_idx].x = force_deltai[0];
+      fdelta[neigh_idx].y = force_deltai[1];
+      fdelta[neigh_idx].z = force_deltai[2];
+
+      tdeltaj[neigh_idx].x = torque_deltaj[0];
+      tdeltaj[neigh_idx].y = torque_deltaj[1];
+      tdeltaj[neigh_idx].z = torque_deltaj[2];
+#else
       pair_interaction(
         xi, xj,
         vi, vj,
@@ -232,6 +269,7 @@ __global__ void compute_kernel_tpa(
         massi, massj,
         typei, typej,
         shearij, torque_deltai, force_deltai);
+#endif
 
       shear[neigh_idx].x = shearij[0];
       shear[neigh_idx].y = shearij[1];
@@ -256,7 +294,13 @@ __global__ void compute_kernel_bpa(
   struct particle *neigh,
   double3 *shear,
   double *force,
-  double *torque) {
+  double *torque
+#ifdef NEWTON_THIRD
+  ,
+  double3 *fdelta,
+  double3 *tdeltaj
+#endif
+  ) {
 
   __shared__ double ftmp[NSLOT*3];
   __shared__ double ttmp[NSLOT*3];
@@ -306,6 +350,25 @@ __global__ void compute_kernel_bpa(
     shearij[1] = shear[neigh_idx].y;
     shearij[2] = shear[neigh_idx].z;
 
+#ifdef NEWTON_THIRD
+    double torque_deltaj[3] = {0,0,0};
+    pair_interaction(
+      xi, xj,
+      vi, vj,
+      omegai, omegaj,
+      radiusi, radiusj,
+      massi, massj,
+      typei, typej,
+      shearij, torque_deltai, force_deltai, torque_deltaj);
+
+    fdelta[neigh_idx].x = force_deltai[0];
+    fdelta[neigh_idx].y = force_deltai[1];
+    fdelta[neigh_idx].z = force_deltai[2];
+
+    tdeltaj[neigh_idx].x = torque_deltaj[0];
+    tdeltaj[neigh_idx].y = torque_deltaj[1];
+    tdeltaj[neigh_idx].z = torque_deltaj[2];
+#else
     pair_interaction(
       xi, xj,
       vi, vj,
@@ -314,6 +377,7 @@ __global__ void compute_kernel_bpa(
       massi, massj,
       typei, typej,
       shearij, torque_deltai, force_deltai);
+#endif
 
     shear[neigh_idx].x = shearij[0];
     shear[neigh_idx].y = shearij[1];
@@ -353,6 +417,41 @@ __global__ void compute_kernel_bpa(
   }
 }
 
+__global__ void gather_kernel(
+  int nparticles,
+  double3 *force_delta, double3 *torquej_delta,
+  int *joffset, int *jcount, int *jmapinv,
+  //outputs
+  double *force, double *torque) {
+  int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  if (idx < nparticles) {
+    double fdelta[3] = {0.0, 0.0, 0.0};
+    double tdelta[3] = {0.0, 0.0, 0.0};
+
+    int joff = joffset[idx];
+    for (int i=0; i<jcount[idx]; i++) {
+      int e = jmapinv[joff+i];
+
+      fdelta[0] -= force_delta[e].x;
+      fdelta[1] -= force_delta[e].y;
+      fdelta[2] -= force_delta[e].z;
+
+      tdelta[0] += torquej_delta[e].x;
+      tdelta[1] += torquej_delta[e].y;
+      tdelta[2] += torquej_delta[e].z;
+    }
+
+    //output
+    force[(idx*3)]   += fdelta[0];
+    force[(idx*3)+1] += fdelta[1];
+    force[(idx*3)+2] += fdelta[2];
+
+    torque[(idx*3)]   += tdelta[0];
+    torque[(idx*3)+1] += tdelta[1];
+    torque[(idx*3)+2] += tdelta[2];
+  }
+}
+
 // --------------------------------------------------------------------------
 // RUN
 // --------------------------------------------------------------------------
@@ -389,35 +488,48 @@ void build_particle_aos(struct params *input, struct particle *&d_particle_aos) 
 void build_neighbor_list(
   int nslot,
   struct params *input,
-  int *&d_numneigh, struct particle *&d_neigh, double3 *&d_shear) {
+  int *&d_numneigh, struct particle *&d_neigh, double3 *&d_shear
+#ifdef NEWTON_THIRD
+  ,
+  int &delta_size, double3 *&d_fdelta, double3 *&d_tdeltaj,
+  int *&d_joffset, int *&d_jcount, int *&d_jmapinv
+#endif
+  ) {
 
+  //numneigh[n]
+  //is the number of neighbors for particle n
   int *numneigh = new int[input->nnode*nslot];
+  //neigh[(n*nslot)+i]
+  //is the struct for the i-th particle in contact with particle n
   struct particle *neigh = new particle[input->nnode*nslot];
+  //shear[(n*nslot)+i]
+  //is the shear for the i-th particle in contact with particle n
   double3 *shear = new double3[input->nnode*nslot];
 
   for (int i=0; i<input->nnode*nslot; i++) {
     numneigh[i] = 0;
   }
   for (int e=0; e<input->nedge; e++) {
-    int i = input->edge[(e*2)  ];
-    int j = input->edge[(e*2)+1];
+    int n1 = input->edge[(e*2)  ];
+    int n2 = input->edge[(e*2)+1];
 
-    assert(numneigh[i] < nslot);
-    int idx = (i*nslot) + numneigh[i];
-    insert_particle(input, neigh, idx, j);
+    assert(numneigh[n1] < nslot);
+    int idx = (n1*nslot) + numneigh[n1];
+    insert_particle(input, neigh, idx, n2);
     shear[idx].x = input->shear[(e*3)  ];
     shear[idx].y = input->shear[(e*3)+1];
     shear[idx].z = input->shear[(e*3)+2];
-    numneigh[i]++;
+    numneigh[n1]++;
 
 #ifndef NEWTON_THIRD
-    assert(numneigh[j] < nslot);
-    idx = (j*nslot) + numneigh[j];
-    insert_particle(input, neigh, idx, i);
+    //insert the symmetric contact if not using Newton's Third Law
+    assert(numneigh[n2] < nslot);
+    idx = (n2*nslot) + numneigh[n2];
+    insert_particle(input, neigh, idx, n1);
     shear[idx].x = input->shear[(e*3)  ];
     shear[idx].y = input->shear[(e*3)+1];
     shear[idx].z = input->shear[(e*3)+2];
-    numneigh[j]++;
+    numneigh[n2]++;
 #endif
   }
 
@@ -438,6 +550,47 @@ void build_neighbor_list(
     cudaMalloc((void **)&d_shear, shear_size));
   ASSERT_NO_CUDA_ERROR(
     cudaMemcpy(d_shear, shear, shear_size, cudaMemcpyHostToDevice));
+
+#ifdef NEWTON_THIRD
+  //jmap[(n*nslot)+i]
+  //is the idx of the i-th particle in contact with particle n
+  int *jmap = new int[input->nnode*nslot];
+  for (int i=0; i<input->nnode*nslot; i++) {
+    jmap[i] = neigh[i].idx;
+  }
+
+  //build an inverse mapping of jmap
+  int *joffset;
+  int *jcount;
+  int *jmapinv;
+  build_inverse_map(
+    numneigh, jmap, input->nnode/*T*/, nslot, input->nnode/*K*/,
+    joffset, jcount, jmapinv);
+
+  const int joffset_jcount_size = input->nnode*sizeof(int);
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_joffset, joffset_jcount_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(d_joffset, joffset, joffset_jcount_size, cudaMemcpyHostToDevice));
+
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_jcount, joffset_jcount_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(d_jcount, jcount, joffset_jcount_size, cudaMemcpyHostToDevice));
+
+  const int jmapinv_size = input->nnode*nslot*sizeof(int);
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_jmapinv, jmapinv_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMemcpy(d_jmapinv, jmapinv, jmapinv_size, cudaMemcpyHostToDevice));
+
+  delta_size = input->nnode*nslot*sizeof(double3);
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_fdelta, delta_size));
+  ASSERT_NO_CUDA_ERROR(
+    cudaMalloc((void **)&d_tdeltaj, delta_size));
+#endif
+
 }
 
 // --------------------------------------------------------------------------
@@ -466,7 +619,24 @@ void run(struct params *input, int num_iter) {
   struct particle *d_neigh = NULL;
   double3 *d_shear = NULL;
   one_time.back().start();
+#ifdef NEWTON_THIRD
+  int delta_size;
+  double3 *d_fdelta = NULL;
+  double3 *d_tdeltaj = NULL;
+  int *d_joffset = NULL;
+  int *d_jcount = NULL;
+  int *d_jmapinv = NULL;
+  build_neighbor_list(NSLOT, input, d_numneigh, d_neigh, d_shear,
+    delta_size, d_fdelta, d_tdeltaj,
+    d_joffset, d_jcount, d_jmapinv);
+  assert(d_fdelta);
+  assert(d_tdeltaj);
+  assert(d_joffset);
+  assert(d_jcount);
+  assert(d_jmapinv);
+#else
   build_neighbor_list(NSLOT, input, d_numneigh, d_neigh, d_shear);
+#endif
   one_time.back().stop_and_add_to_total();
   assert(d_numneigh);
   assert(d_neigh);
@@ -539,6 +709,7 @@ void run(struct params *input, int num_iter) {
 #else
   per_iter.push_back(SimpleTimer("compute_kernel_bpa"));
 #endif
+  per_iter.push_back(SimpleTimer("gather_kernel"));
   per_iter.push_back(SimpleTimer("result_fetch"));
 
 #ifdef PINNED_MEM
@@ -560,6 +731,7 @@ void run(struct params *input, int num_iter) {
   for (int run=0; run<num_iter; run++) {
     //PREPROCESSING
     //copy across structures that change between kernel invocations,
+    //reset delta structures (force/torque)
     //TODO(1): just copy dummy structures for timing
     per_iter[0].start();
 #ifdef PINNED_MEM
@@ -585,6 +757,12 @@ void run(struct params *input, int num_iter) {
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(d_torque, input->torque, torque_size, cudaMemcpyHostToDevice));
 #endif
+#ifdef NEWTON_THIRD
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemset((void *)d_fdelta, 0, delta_size));
+    ASSERT_NO_CUDA_ERROR(
+      cudaMemset((void *)d_tdeltaj, 0, delta_size));
+#endif
     per_iter[0].stop_and_add_to_total();
 
     //-----------------------------------------------------------------------
@@ -600,18 +778,34 @@ void run(struct params *input, int num_iter) {
     cudaPrintfInit();
 #endif
     per_iter[1].start();
-#ifdef COMPUTE_TPA
+#ifdef NEWTON_THIRD
+  #ifdef COMPUTE_TPA
+    const int blockSize = 128;
+    dim3 gridSize((input->nnode / blockSize)+1);
+    compute_kernel_tpa<<<gridSize, blockSize>>>(
+      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      d_shear, d_force, d_torque, d_fdelta, d_tdeltaj);
+  #else //COMPUTE_BPA
+    const int blockSize = NSLOT;
+    dim3 gridSize(input->nnode);
+    compute_kernel_bpa<<<gridSize, blockSize>>>(
+      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      d_shear, d_force, d_torque, d_fdelta, d_tdeltaj);
+  #endif
+#else
+  #ifdef COMPUTE_TPA
     const int blockSize = 128;
     dim3 gridSize((input->nnode / blockSize)+1);
     compute_kernel_tpa<<<gridSize, blockSize>>>(
       input->nnode, d_particle_aos, d_numneigh, d_neigh,
       d_shear, d_force, d_torque);
-#else
+  #else //COMPUTE_BPA
     const int blockSize = NSLOT;
     dim3 gridSize(input->nnode);
     compute_kernel_bpa<<<gridSize, blockSize>>>(
       input->nnode, d_particle_aos, d_numneigh, d_neigh,
       d_shear, d_force, d_torque);
+  #endif
 #endif
     cudaThreadSynchronize();
     per_iter[1].stop_and_add_to_total();
@@ -621,6 +815,25 @@ void run(struct params *input, int num_iter) {
       printf("Post-compute-kernel error: %s.\n", cudaGetErrorString(err));
       exit(1);
     }
+
+#ifdef NEWTON_THIRD
+    const int gatherBlockSize = 128;
+    dim3 gatherGridSize((input->nnode / gatherBlockSize)+1);
+    per_iter[2].start();
+    gather_kernel<<<gatherGridSize, gatherBlockSize>>>(
+      input->nnode,
+      d_fdelta, d_tdeltaj,
+      d_joffset, d_jcount, d_jmapinv,
+      d_force, d_torque);
+    cudaThreadSynchronize();
+    per_iter[2].stop_and_add_to_total();
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("Post-gather error: %s.\n", cudaGetErrorString(err));
+      exit(1);
+    }
+#endif
 
 #ifdef KERNEL_PRINT
     cudaPrintfDisplay(stdout, true);
@@ -632,14 +845,14 @@ void run(struct params *input, int num_iter) {
     //POSTPROCESSING
     //memcpy data back to host
     const int shear_size = input->nnode*NSLOT*sizeof(double3);
-    per_iter[2].start();
+    per_iter[3].start();
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(shear_result, d_shear, shear_size, cudaMemcpyDeviceToHost));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(force_result, d_force, force_size, cudaMemcpyDeviceToHost));
     ASSERT_NO_CUDA_ERROR(
       cudaMemcpy(torque_result, d_torque, torque_size, cudaMemcpyDeviceToHost));
-    per_iter[2].stop_and_add_to_total();
+    per_iter[3].stop_and_add_to_total();
 
 #if 0
     if (run == 0) {
