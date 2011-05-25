@@ -3,6 +3,7 @@
  */
 
 #define NSLOT 32          //< maximum number of neighbors per particle
+#define AOS_LAYOUT        //< AoS or SoA layout for read-only particle data
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define MAP_BUILD_CHECK //< bounds and sanity checking in build_inverse_map
 //#define NEWTON_THIRD    //< use Newton's third law to halve computation
@@ -184,7 +185,11 @@ __device__ void pair_interaction(
 
 __global__ void compute_kernel_tpa(
   int nparticles,
+#ifdef AOS_LAYOUT
   struct particle *particle_aos,
+#else
+  struct particle *particle_soa,
+#endif
   int *numneigh,
   struct particle *neigh,
   double3 *shear,
@@ -209,6 +214,7 @@ __global__ void compute_kernel_tpa(
     double force_deltai[3] = {0,0,0};
     double torque_deltai[3] = {0,0,0};
 
+#ifdef AOS_LAYOUT
     xi[0]     = particle_aos[idx].x[0];
     xi[1]     = particle_aos[idx].x[1];
     xi[2]     = particle_aos[idx].x[2];
@@ -221,9 +227,24 @@ __global__ void compute_kernel_tpa(
     radiusi   = particle_aos[idx].radius;
     massi     = particle_aos[idx].mass;
     typei     = particle_aos[idx].type;
+#else
+    xi[0]     = particle_soa.x[(idx*3)+0];
+    xi[1]     = particle_soa.x[(idx*3)+1];
+    xi[2]     = particle_soa.x[(idx*3)+2];
+    vi[0]     = particle_soa.v[(idx*3)+0];
+    vi[1]     = particle_soa.v[(idx*3)+1];
+    vi[2]     = particle_soa.v[(idx*3)+2];
+    omegai[0] = particle_soa.omega[(idx*3)+0];
+    omegai[1] = particle_soa.omega[(idx*3)+1];
+    omegai[2] = particle_soa.omega[(idx*3)+2];
+    radiusi   = particle_soa.radius[idx];
+    massi     = particle_soa.mass[idx];
+    typei     = particle_soa.type[idx];
+#endif
 
     for (int jj=0; jj<numneigh[idx]; jj++) {
       int neigh_idx = (idx*NSLOT)+jj;
+#ifdef AOS_LAYOUT
       //int j   = neigh[neigh_idx].idx;
       xj[0]     = neigh[neigh_idx].x[0];
       xj[1]     = neigh[neigh_idx].x[1];
@@ -237,6 +258,21 @@ __global__ void compute_kernel_tpa(
       radiusj   = neigh[neigh_idx].radius;
       massj     = neigh[neigh_idx].mass;
       typej     = neigh[neigh_idx].type;
+#else
+      //int j   = neigh.idx[neigh_idx];
+      xj[0]     = neigh.x[(neigh_idx*3)+0];
+      xj[1]     = neigh.x[(neigh_idx*3)+1];
+      xj[2]     = neigh.x[(neigh_idx*3)+2];
+      vj[0]     = neigh.v[(neigh_idx*3)+0];
+      vj[1]     = neigh.v[(neigh_idx*3)+1];
+      vj[2]     = neigh.v[(neigh_idx*3)+2];
+      omegaj[0] = neigh.omega[(neigh_idx*3)+0];
+      omegaj[1] = neigh.omega[(neigh_idx*3)+1];
+      omegaj[2] = neigh.omega[(neigh_idx*3)+2];
+      radiusj   = neigh.radius[neigh_idx];
+      massj     = neigh.mass[neigh_idx];
+      typej     = neigh.type[neigh_idx];
+#endif
 
       shearij[0] = shear[neigh_idx].x;
       shearij[1] = shear[neigh_idx].y;
@@ -289,7 +325,11 @@ __global__ void compute_kernel_tpa(
 //    this kernel will produce incorrect results if blockDim.x < NSLOT
 __global__ void compute_kernel_bpa(
   int nparticles,
+#ifdef AOS_LAYOUT
   struct particle *particle_aos,
+#else
+  struct particle *particle_soa,
+#endif
   int *numneigh,
   struct particle *neigh,
   double3 *shear,
@@ -318,6 +358,7 @@ __global__ void compute_kernel_bpa(
     double force_deltai[3] = {0,0,0};
     double torque_deltai[3] = {0,0,0};
 
+#ifdef AOS_LAYOUT
     xi[0]     = particle_aos[idx].x[0];
     xi[1]     = particle_aos[idx].x[1];
     xi[2]     = particle_aos[idx].x[2];
@@ -330,8 +371,23 @@ __global__ void compute_kernel_bpa(
     radiusi   = particle_aos[idx].radius;
     massi     = particle_aos[idx].mass;
     typei     = particle_aos[idx].type;
+#else
+    xi[0]     = particle_soa.x[(idx*3)+0];
+    xi[1]     = particle_soa.x[(idx*3)+1];
+    xi[2]     = particle_soa.x[(idx*3)+2];
+    vi[0]     = particle_soa.v[(idx*3)+0];
+    vi[1]     = particle_soa.v[(idx*3)+1];
+    vi[2]     = particle_soa.v[(idx*3)+2];
+    omegai[0] = particle_soa.omega[(idx*3)+0];
+    omegai[1] = particle_soa.omega[(idx*3)+1];
+    omegai[2] = particle_soa.omega[(idx*3)+2];
+    radiusi   = particle_soa.radius[idx];
+    massi     = particle_soa.mass[idx];
+    typei     = particle_soa.type[idx];
+#endif
 
     int neigh_idx = (idx*NSLOT)+jj;
+#ifdef AOS_LAYOUT
     //int j   = neigh[neigh_idx].idx;
     xj[0]     = neigh[neigh_idx].x[0];
     xj[1]     = neigh[neigh_idx].x[1];
@@ -345,6 +401,21 @@ __global__ void compute_kernel_bpa(
     radiusj   = neigh[neigh_idx].radius;
     massj     = neigh[neigh_idx].mass;
     typej     = neigh[neigh_idx].type;
+#else
+    //int j   = neigh.idx[neigh_idx];
+    xj[0]     = neigh.x[(neigh_idx*3)+0];
+    xj[1]     = neigh.x[(neigh_idx*3)+1];
+    xj[2]     = neigh.x[(neigh_idx*3)+2];
+    vj[0]     = neigh.v[(neigh_idx*3)+0];
+    vj[1]     = neigh.v[(neigh_idx*3)+1];
+    vj[2]     = neigh.v[(neigh_idx*3)+2];
+    omegaj[0] = neigh.omega[(neigh_idx*3)+0];
+    omegaj[1] = neigh.omega[(neigh_idx*3)+1];
+    omegaj[2] = neigh.omega[(neigh_idx*3)+2];
+    radiusj   = neigh.radius[neigh_idx];
+    massj     = neigh.mass[neigh_idx];
+    typej     = neigh.type[neigh_idx];
+#endif
 
     shearij[0] = shear[neigh_idx].x;
     shearij[1] = shear[neigh_idx].y;
@@ -456,33 +527,49 @@ __global__ void gather_kernel(
 // RUN
 // --------------------------------------------------------------------------
 
-void insert_particle(struct params *input, struct particle *aos, int id, int n) {
+void insert_particle(struct params *input, struct particle *particle_list, int id, int n) {
   assert(n < input->nnode);
-  aos[id].idx      = n;
-  aos[id].x[0]     = input->x[(n*3)  ];
-  aos[id].x[1]     = input->x[(n*3)+1];
-  aos[id].x[2]     = input->x[(n*3)+2];
-  aos[id].v[0]     = input->v[(n*3)  ];
-  aos[id].v[1]     = input->v[(n*3)+1];
-  aos[id].v[2]     = input->v[(n*3)+2];
-  aos[id].omega[0] = input->omega[(n*3)  ];
-  aos[id].omega[1] = input->omega[(n*3)+1];
-  aos[id].omega[2] = input->omega[(n*3)+2];
-  aos[id].radius   = input->radius[n];
-  aos[id].mass     = input->mass[n];
-  aos[id].type     = input->type[n];
+#ifdef AOS_LAYOUT
+  particle_list[id].idx      = n;
+  particle_list[id].x[0]     = input->x[(n*3)  ];
+  particle_list[id].x[1]     = input->x[(n*3)+1];
+  particle_list[id].x[2]     = input->x[(n*3)+2];
+  particle_list[id].v[0]     = input->v[(n*3)  ];
+  particle_list[id].v[1]     = input->v[(n*3)+1];
+  particle_list[id].v[2]     = input->v[(n*3)+2];
+  particle_list[id].omega[0] = input->omega[(n*3)  ];
+  particle_list[id].omega[1] = input->omega[(n*3)+1];
+  particle_list[id].omega[2] = input->omega[(n*3)+2];
+  particle_list[id].radius   = input->radius[n];
+  particle_list[id].mass     = input->mass[n];
+  particle_list[id].type     = input->type[n];
+#else
+  particle_list.idx[id]         = n;
+  particle_list.x[(id*3)+0]     = input->x[(n*3)  ];
+  particle_list.x[(id*3)+1]     = input->x[(n*3)+1];
+  particle_list.x[(id*3)+2]     = input->x[(n*3)+2];
+  particle_list.v[(id*3)+0]     = input->v[(n*3)  ];
+  particle_list.v[(id*3)+1]     = input->v[(n*3)+1];
+  particle_list.v[(id*3)+2]     = input->v[(n*3)+2];
+  particle_list.omega[(id*3)+0] = input->omega[(n*3)  ];
+  particle_list.omega[(id*3)+1] = input->omega[(n*3)+1];
+  particle_list.omega[(id*3)+2] = input->omega[(n*3)+2];
+  particle_list.radius[id]      = input->radius[n];
+  particle_list.mass[id]        = input->mass[n];
+  particle_list.type[id]        = input->type[n];
+#endif
 }
 
-void build_particle_aos(struct params *input, struct particle *&d_particle_aos) {
-  struct particle *aos = new particle[input->nnode];
+void build_particle_list(struct params *input, struct particle *&d_particle_list) {
+  struct particle *particle_list = new particle[input->nnode];
   for (int n=0; n<input->nnode; n++) {
-    insert_particle(input, aos, n, n);
+    insert_particle(input, particle_list, n, n);
   }
-  const int aos_size = input->nnode*sizeof(struct particle);
+  const int particle_list_size = input->nnode*sizeof(struct particle);
   ASSERT_NO_CUDA_ERROR(
-    cudaMalloc((void **)&d_particle_aos, aos_size));
+    cudaMalloc((void **)&d_particle_list, particle_list_size));
   ASSERT_NO_CUDA_ERROR(
-    cudaMemcpy(d_particle_aos, aos, aos_size, cudaMemcpyHostToDevice));
+    cudaMemcpy(d_particle_list, particle_list, particle_list_size, cudaMemcpyHostToDevice));
 }
 
 void build_neighbor_list(
@@ -607,12 +694,12 @@ void run(struct params *input, int num_iter) {
   setup_hertz_constants();
   one_time.back().stop_and_add_to_total();
 
-  one_time.push_back(SimpleTimer("build_particle_aos"));
-  struct particle *d_particle_aos = NULL;
+  one_time.push_back(SimpleTimer("build_particle_list"));
+  struct particle *d_particle_list = NULL;
   one_time.back().start();
-  build_particle_aos(input, d_particle_aos);
+  build_particle_list(input, d_particle_list);
   one_time.back().stop_and_add_to_total();
-  assert(d_particle_aos);
+  assert(d_particle_list);
 
   one_time.push_back(SimpleTimer("build_neigh_list"));
   int *d_numneigh = NULL;
@@ -785,13 +872,13 @@ void run(struct params *input, int num_iter) {
     const int blockSize = 128;
     dim3 gridSize((input->nnode / blockSize)+1);
     compute_kernel_tpa<<<gridSize, blockSize>>>(
-      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      input->nnode, d_particle_list, d_numneigh, d_neigh,
       d_shear, d_force, d_torque, d_fdelta, d_tdeltaj);
   #else //COMPUTE_BPA
     const int blockSize = NSLOT;
     dim3 gridSize(input->nnode);
     compute_kernel_bpa<<<gridSize, blockSize>>>(
-      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      input->nnode, d_particle_list, d_numneigh, d_neigh,
       d_shear, d_force, d_torque, d_fdelta, d_tdeltaj);
   #endif
 #else
@@ -799,13 +886,13 @@ void run(struct params *input, int num_iter) {
     const int blockSize = 128;
     dim3 gridSize((input->nnode / blockSize)+1);
     compute_kernel_tpa<<<gridSize, blockSize>>>(
-      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      input->nnode, d_particle_list, d_numneigh, d_neigh,
       d_shear, d_force, d_torque);
   #else //COMPUTE_BPA
     const int blockSize = NSLOT;
     dim3 gridSize(input->nnode);
     compute_kernel_bpa<<<gridSize, blockSize>>>(
-      input->nnode, d_particle_aos, d_numneigh, d_neigh,
+      input->nnode, d_particle_list, d_numneigh, d_neigh,
       d_shear, d_force, d_torque);
   #endif
 #endif
@@ -893,7 +980,7 @@ void run(struct params *input, int num_iter) {
   cudaFree(d_fdelta);
   cudaFree(d_tdeltaj);
 #endif
-  cudaFree(d_particle_aos);
+  cudaFree(d_particle_list);
   cudaFree(d_numneigh);
   cudaFree(d_neigh);
   cudaFree(d_shear);
