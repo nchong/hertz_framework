@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-import sys
-import getopt
-
 class Params(object):
   def __init__(self, **kwds):
     self.__dict__.update(kwds)
@@ -10,11 +7,11 @@ class Params(object):
 def parse_file(fname):
   with open(fname, 'r') as f:
     def get_scalar_array(convert, n):
-      [convert(f.next()) for x in xrange(n)]
+      return [convert(f.next()) for x in xrange(n)]
     def get_vector_array(convert, n):
-      [[convert(f.next()),
-        convert(f.next()),
-        convert(f.next())] for x in xrange(n)]
+      return [[convert(f.next()),
+               convert(f.next()),
+               convert(f.next())] for x in xrange(n)]
     # constants
     dt         = float(f.next())
     nktv2p     = float(f.next())
@@ -25,12 +22,12 @@ def parse_file(fname):
     coeffFrict = [float(f.next()) for x in xrange(ntype*ntype)]
     # per-particle data
     nnode = int(f.next())
-    x = get_vector_array(float, nnode)
+    pos = get_vector_array(float, nnode)
     v = get_vector_array(float, nnode)
     omega = get_vector_array(float, nnode)
     radius = get_scalar_array(float, nnode)
     mass = get_scalar_array(float, nnode)
-    type = get_scalar_array(int, nnode)
+    ty = get_scalar_array(int, nnode)
     force = get_vector_array(float, nnode)
     torque = get_vector_array(float, nnode)
     # per-neighbor data
@@ -45,18 +42,10 @@ def parse_file(fname):
         ntype=ntype,
           yeff=yeff, geff=geff, betaeff=betaeff, coeffFrict=coeffFrict,
         nnode=nnode,
-          x=x, v=v, omega=omega, radius=radius, mass=mass, type=type,
+          x=pos, v=v, omega=omega, radius=radius, mass=mass, ty=ty,
           force=force, torque=torque,
         nedge=nedge,
           edge=edge, shear=shear,
         expected_force=expected_force,
         expected_torque=expected_force,
         expected_shear=expected_shear)
-
-def main(argv=None):
-  if argv is None:
-    argv = sys.argv
-  p = parse_file(argv[1])
-
-if __name__ == '__main__':
-  sys.exit(main())
