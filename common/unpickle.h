@@ -54,4 +54,6 @@ struct params *parse_file(std::string fname);
 
 void parse_partition_file(struct params *input, std::string fname);
 
+void delete_params(struct params *p);
+
 #endif

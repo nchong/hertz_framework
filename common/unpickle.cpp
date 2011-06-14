@@ -195,3 +195,32 @@ void parse_partition_file(struct params *input, string fname) {
   input->partition_length =
     vector<int>(partition_length, partition_length + npartition);
 }
+
+void delete_params(struct params *p) {
+  delete[] p->yeff;
+  delete[] p->geff;
+  delete[] p->betaeff;
+  delete[] p->coeffFrict;
+
+  delete[] p->x;
+  delete[] p->v;
+  delete[] p->omega;
+  delete[] p->radius;
+  delete[] p->mass;
+  delete[] p->type;
+  delete[] p->force;
+  delete[] p->torque;
+
+  delete[] p->edge;
+  delete[] p->shear;
+
+  delete[] p->expected_force;
+  delete[] p->expected_torque;
+  delete[] p->expected_shear;
+
+  if (p->npartition > 1) {
+    p->partition_length.clear();
+  }
+
+  delete p;
+}
