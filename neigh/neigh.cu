@@ -2,13 +2,13 @@
  * Neighbor list decomposition of the hertz pairwise kernel.
  */
 
-#define NSLOT 32          //< maximum number of neighbors per particle
-//#define AOS_LAYOUT      //< AoS or SoA layout for read-only particle data
+#define NSLOT 96          //< maximum number of neighbors per particle
+#define AOS_LAYOUT      //< AoS or SoA layout for read-only particle data
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define MAP_BUILD_CHECK //< bounds and sanity checking in build_inverse_map
 //#define NEWTON_THIRD    //< use Newton's third law to halve computation
 //#define COMPUTE_TPA     //< thread-per-atom decomposition
-//#define PINNED_MEM      //< use pinned-memory for kernel output
+#define PINNED_MEM      //< use pinned-memory for kernel output
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"

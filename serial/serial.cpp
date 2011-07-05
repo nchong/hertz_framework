@@ -27,13 +27,14 @@ void run(struct params *input, int num_iter) {
 
   per_iter.push_back(SimpleTimer("kernel"));
 
+  //internal copies of outputs
+  double *force = new double[input->nnode*3];
+  double *torque = new double[input->nnode*3];
+  double *shear = new double[input->nedge*3];
+
   for (int run=0; run<num_iter; run++) {
 
-    //make some internal copies
-    double *force = new double[input->nnode*3];
-    double *torque = new double[input->nnode*3];
-    double *shear = new double[input->nedge*3];
-
+    //make copies
     for (int n=0; n<input->nnode*3; n++) {
       force[n] = input->force[n];
       torque[n] = input->torque[n];
@@ -221,4 +222,8 @@ void run(struct params *input, int num_iter) {
     }
 
   }
+
+  delete[] force;
+  delete[] torque;
+  delete[] shear;
 }
