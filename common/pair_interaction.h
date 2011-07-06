@@ -2,9 +2,14 @@
 #define PAIR_INTERACTION_H
 
 #include "hertz_constants.h"
+#ifndef __CUDACC__
+  #include <math.h>
+#endif
 
 #ifdef __CUDACC__
   __device__ 
+#else
+  inline
 #endif 
   void pair_interaction(
 #if DEBUG

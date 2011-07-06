@@ -13,13 +13,13 @@ __constant__ double d_geff;
 __constant__ double d_betaeff;
 __constant__ double d_coeffFrict;
 
-void setup_hertz_constants() {
-  double dt = 0.00001;
-  double nktv2p = 1;
-  double yeff = 3134796.2382445144467056;
-  double geff = 556173.5261401557363570;
-  double betaeff = -0.3578571305033167;
-  double coeffFrict = 0.5;
+void setup_hertz_constants(struct params *input) {
+  double dt = input->dt;
+  double nktv2p = input->nktv2p;
+  double yeff = input->yeff[3];
+  double geff = input->geff[3];
+  double betaeff = input->betaeff[3];
+  double coeffFrict = input->coeffFrict[3];
   ASSERT_NO_CUDA_ERROR(
     cudaMemcpyToSymbol("d_dt", &dt, sizeof(double),
       0, cudaMemcpyHostToDevice));
@@ -39,6 +39,15 @@ void setup_hertz_constants() {
     cudaMemcpyToSymbol("d_coeffFrict", &coeffFrict, sizeof(double),
       0, cudaMemcpyHostToDevice));
 }
+#else
+
+double d_dt;
+double d_nktv2p;
+double d_yeff;
+double d_geff;
+double d_betaeff;
+double d_coeffFrict;
+
 #endif
 
 #endif
