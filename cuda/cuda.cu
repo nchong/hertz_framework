@@ -14,8 +14,8 @@
  *
  */
 
-//#define KERNEL_PRINT    //< debug printing in kernel
 //#define MAP_BUILD_CHECK //< bounds and sanity checking in build_inverse_map
+//#define KERNEL_PRINT    //< debug printing in kernel
 //#define DEBUG           //< add (i,j) index information to struct
 
 #ifdef GPU_TIMER
@@ -67,39 +67,10 @@ __global__ void aos_kernel(
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < ncontacts) {
     struct contact c = aos[idx];
-#if 0
-    cuPrintf("idx = %d\n", idx);
-    cuPrintf("xi = {%f, %f, %f}\n",
-        c.xi[0], c.xi[1], c.xi[2]);
-    cuPrintf("xj = {%f, %f, %f}\n",
-        c.xj[0], c.xj[1], c.xj[2]);
-    cuPrintf("vi = {%f, %f, %f}\n",
-        c.vi[0], c.vi[1], c.vi[2]);
-    cuPrintf("vj = {%f, %f, %f}\n",
-        c.vj[0], c.vj[1], c.vj[2]);
-    cuPrintf("omegai = {%f, %f, %f}\n",
-        c.omegai[0], c.omegai[1], c.omegai[2]);
-    cuPrintf("omegaj = {%f, %f, %f}\n",
-        c.omegaj[0], c.omegai[1], c.omegai[2]);
-    cuPrintf("radiusi = %f\n", c.radiusi);
-    cuPrintf("radiusj = %f\n", c.radiusj);
-    cuPrintf("massi = %f\n", c.massi);
-    cuPrintf("massj = %f\n", c.massj);
-    cuPrintf("typei = %d\n", c.typei);
-    cuPrintf("typej = %d\n", c.typej);
-    cuPrintf("force = {%f, %f, %f}\n",
-        force[(idx*3)], force[(idx*3)+1], force[(idx*3)+2]);
-    cuPrintf("torque = {%f, %f, %f}\n",
-        torque[(idx*3)], torque[(idx*3)+1], torque[(idx*3)+2]);
-    cuPrintf("torquej = {%f, %f, %f}\n",
-        torquej[(idx*3)], torquej[(idx*3)+1], torquej[(idx*3)+2]);
-    cuPrintf("shear = {%f, %f, %f}\n",
-        shear[(idx*3)], shear[(idx*3)+1], shear[(idx*3)+2]);
-#endif
 
     pair_interaction(
 #ifdef DEBUG
-        i,j,
+        c.i,c.j,
 #endif
         c.xi, c.xj,
         c.vi, c.vj,
@@ -110,17 +81,6 @@ __global__ void aos_kernel(
         &shear[(idx*3)],
         &force[(idx*3)], /*forcej is */NULL,
         &torque[(idx*3)], &torquej[(idx*3)]);
-
-#if 0
-    cuPrintf("force' = {%f, %f, %f}\n",
-        force[(idx*3)], force[(idx*3)+1], force[(idx*3)+2]);
-    cuPrintf("torque' = {%f, %f, %f}\n",
-        torque[(idx*3)], torque[(idx*3)+1], torque[(idx*3)+2]);
-    cuPrintf("torquej' = {%f, %f, %f}\n",
-        torquej[(idx*3)], torquej[(idx*3)+1], torquej[(idx*3)+2]);
-    cuPrintf("shear' = {%f, %f, %f}\n",
-        shear[(idx*3)], shear[(idx*3)+1], shear[(idx*3)+2]);
-#endif
   }
 }
 

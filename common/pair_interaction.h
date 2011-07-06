@@ -6,13 +6,58 @@
   #include <math.h>
 #endif
 
+#define DEBUG_PRINT_INPUTS(printi) {                    \
+  if (i == printi || j == printi) {                     \
+    cuPrintf("i = %d; j = %d;\n", i, j);                \
+    cuPrintf("xi = {%.16f, %.16f, %.16f}\n",            \
+        xi[0], xi[1], xi[2]);                           \
+    cuPrintf("xj = {%.16f, %.16f, %.16f}\n",            \
+        xj[0], xj[1], xj[2]);                           \
+    cuPrintf("vi = {%.16f, %.16f, %.16f}\n",            \
+        vi[0], vi[1], vi[2]);                           \
+    cuPrintf("vj = {%.16f, %.16f, %.16f}\n",            \
+        vj[0], vj[1], vj[2]);                           \
+    cuPrintf("omegai = {%.16f, %.16f, %.16f}\n",        \
+        omegai[0], omegai[1], omegai[2]);               \
+    cuPrintf("omegaj = {%.16f, %.16f, %.16f}\n",        \
+        omegaj[0], omegai[1], omegai[2]);               \
+    cuPrintf("radi = %.16f\n", radi);                   \
+    cuPrintf("radj = %.16f\n", radj);                   \
+    cuPrintf("massi = %.16f\n", massi);                 \
+    cuPrintf("massj = %.16f\n", massj);                 \
+    cuPrintf("typei = %d\n", typei);                    \
+    cuPrintf("typej = %d\n", typej);                    \
+    cuPrintf("forcei = {%.16f, %.16f, %.16f}\n",        \
+        forcei[0], forcei[1], forcei[2]);               \
+    cuPrintf("torquei = {%.16f, %.16f, %.16f}\n",       \
+        torquei[0], torquei[1], torquei[2]);            \
+    cuPrintf("shear = {%.16f, %.16f, %.16f}\n",         \
+        shear[0], shear[1], shear[2]);                  \
+  }                                                     \
+} while(0);
+
+#define DEBUG_PRINT_OUTPUTS(printi) {                   \
+  if (i == printi || j == printi) {                     \
+    cuPrintf("new forcei = {%.16f, %.16f, %.16f}\n",    \
+        forcei[0], forcei[1], forcei[2]);               \
+    cuPrintf("new torquei = {%.16f, %.16f, %.16f}\n",   \
+        torquei[0], torquei[1], torquei[2]);            \
+    if (torquej != NULL) {                              \
+      cuPrintf("new torquej = {%.16f, %.16f, %.16f}\n", \
+          torquej[0], torquej[1], torquej[2]);          \
+    }                                                   \
+    cuPrintf("shear' = {%.16f, %.16f, %.16f}\n",        \
+        shear[0], shear[1], shear[2]);                  \
+  }                                                     \
+} while(0);
+
 #ifdef __CUDACC__
   __device__ 
 #else
   inline
 #endif 
   void pair_interaction(
-#if DEBUG
+#ifdef DEBUG
     int i, int j,
 #endif
   //inputs
@@ -42,6 +87,7 @@
     shear[1] = 0.0;
     shear[2] = 0.0;
   } else {
+
     //distance between centres of atoms i and j
     //or, magnitude of del vector
     double r = sqrt(rsq);
@@ -172,6 +218,7 @@
       torquej[1] -= crj*tor2;
       torquej[2] -= crj*tor3;
     }
+
   }
 }
 
