@@ -42,4 +42,4 @@ neigh_newton_tpa_posix_timer: neigh.cu $(OBJ)
 	$(NVCC) $(NVCCFLAGS) -I $(INCLUDEDIR) -D NEWTON_THIRD -D COMPUTE_TPA -D POSIX_TIMER -lrt $^ -o $@
 
 clean:
-	rm -f neigh_bpa_* neigh_tpa_* *.log *.data
+	rm -f neigh_bpa_* neigh_tpa_* neigh_newton_* *.log *.data
