@@ -205,7 +205,6 @@ void run(struct params *input, int num_iter) {
     geff = input->geff[3];
     betaeff = input->betaeff[3];
     coeffFrict = input->coeffFrict[3];
-    print_params(input);
 
     //make some internal copies
     double *force = new double[input->nnode*3];
