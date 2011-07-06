@@ -10,13 +10,13 @@
  * expected output.
  *
  * We sum through this indirection by first creating an inverse mapping and
- * running a separate gather kernel over the [force] and [torque] arrays.
+ * running a separate collect kernel over the [force] and [torque] arrays.
  *
  */
 
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define MAP_BUILD_CHECK //< bounds and sanity checking in build_inverse_map
-//#define AOS_EXTRA_DEBUG //< add (i,j) index information to struct
+//#define DEBUG           //< add (i,j) index information to struct
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"
@@ -30,6 +30,7 @@
 #include "cuda_common.h"
 #include "framework.h"
 #include "hertz_constants.h"
+#include "pair_interaction.h"
 #include "inverse_map.h"
 #include <sstream>
 
@@ -44,7 +45,7 @@ using namespace std;
 // TODO(1): take out x, v, and omega
 // TODO(2): move radius, mass and type to constant
 struct contact {
-#ifdef AOS_EXTRA_DEBUG
+#ifdef DEBUG
   int i; int j;
 #endif
   double xi[3];     double xj[3];
@@ -56,18 +57,12 @@ struct contact {
 };
 
 __global__ void aos_kernel(
-  int ncontacts,
-  struct contact *aos,
-  double3 *force,
-  double3 *torque, double3 *torquej,
-  double  *shear) {
-  //TODO(0): don't hardcode, push these into constant memory
-  double dt = 0.00001;
-  double nktv2p = 1;
-  double yeff = 3134796.2382445144467056;
-  double geff = 556173.5261401557363570;
-  double betaeff = -0.3578571305033167;
-  double coeffFrict = 0.5;
+    int ncontacts,
+    struct contact *aos,
+    double *force,
+    double *torque,
+    double *torquej,
+    double  *shear) {
 
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < ncontacts) {
@@ -75,17 +70,17 @@ __global__ void aos_kernel(
 #if 0
     cuPrintf("idx = %d\n", idx);
     cuPrintf("xi = {%f, %f, %f}\n",
-      c.xi[0], c.xi[1], c.xi[2]);
+        c.xi[0], c.xi[1], c.xi[2]);
     cuPrintf("xj = {%f, %f, %f}\n",
-      c.xj[0], c.xj[1], c.xj[2]);
+        c.xj[0], c.xj[1], c.xj[2]);
     cuPrintf("vi = {%f, %f, %f}\n",
-      c.vi[0], c.vi[1], c.vi[2]);
+        c.vi[0], c.vi[1], c.vi[2]);
     cuPrintf("vj = {%f, %f, %f}\n",
-      c.vj[0], c.vj[1], c.vj[2]);
+        c.vj[0], c.vj[1], c.vj[2]);
     cuPrintf("omegai = {%f, %f, %f}\n",
-      c.omegai[0], c.omegai[1], c.omegai[2]);
+        c.omegai[0], c.omegai[1], c.omegai[2]);
     cuPrintf("omegaj = {%f, %f, %f}\n",
-      c.omegaj[0], c.omegai[1], c.omegai[2]);
+        c.omegaj[0], c.omegai[1], c.omegai[2]);
     cuPrintf("radiusi = %f\n", c.radiusi);
     cuPrintf("radiusj = %f\n", c.radiusj);
     cuPrintf("massi = %f\n", c.massi);
@@ -93,164 +88,45 @@ __global__ void aos_kernel(
     cuPrintf("typei = %d\n", c.typei);
     cuPrintf("typej = %d\n", c.typej);
     cuPrintf("force = {%f, %f, %f}\n",
-      force[idx].x, force[idx].y, force[idx].z);
+        force[(idx*3)], force[(idx*3)+1], force[(idx*3)+2]);
     cuPrintf("torque = {%f, %f, %f}\n",
-      torque[idx].x, torque[idx].y, torque[idx].z);
+        torque[(idx*3)], torque[(idx*3)+1], torque[(idx*3)+2]);
     cuPrintf("torquej = {%f, %f, %f}\n",
-      torquej[idx].x, torquej[idx].y, torquej[idx].z);
+        torquej[(idx*3)], torquej[(idx*3)+1], torquej[(idx*3)+2]);
     cuPrintf("shear = {%f, %f, %f}\n",
-      shear[(idx*3)], shear[(idx*3)+1], shear[(idx*3)+2]);
-#endif
-
-    // del is the vector from j to i
-    double delx = c.xi[0] - c.xj[0];
-    double dely = c.xi[1] - c.xj[1];
-    double delz = c.xi[2] - c.xj[2];
-
-    double rsq = delx*delx + dely*dely + delz*delz;
-    double radsum = c.radiusi + c.radiusj;
-    if (rsq >= radsum*radsum) {
-      //unset non-touching atoms
-      shear[(idx*3)  ] = 0.0;
-      shear[(idx*3)+1] = 0.0;
-      shear[(idx*3)+2] = 0.0;
-    } else {
-      //distance between centres of atoms i and j
-      //or, magnitude of del vector
-      double r = sqrt(rsq);
-      double rinv = 1.0/r;
-      double rsqinv = 1.0/rsq;
-
-      // relative translational velocity
-      double vr1 = c.vi[0] - c.vj[0];
-      double vr2 = c.vi[1] - c.vj[1];
-      double vr3 = c.vi[2] - c.vj[2];
-
-      // normal component
-      double vnnr = vr1*delx + vr2*dely + vr3*delz;
-      double vn1 = delx*vnnr * rsqinv;
-      double vn2 = dely*vnnr * rsqinv;
-      double vn3 = delz*vnnr * rsqinv;
-
-      // tangential component
-      double vt1 = vr1 - vn1;
-      double vt2 = vr2 - vn2;
-      double vt3 = vr3 - vn3;
-
-      // relative rotational velocity
-      double wr1 = (c.radiusi*c.omegai[0] + c.radiusj*c.omegaj[0]) * rinv;
-      double wr2 = (c.radiusi*c.omegai[1] + c.radiusj*c.omegaj[1]) * rinv;
-      double wr3 = (c.radiusi*c.omegai[2] + c.radiusj*c.omegaj[2]) * rinv;
-
-      // normal forces = Hookian contact + normal velocity damping
-      double meff = c.massi*c.massj/(c.massi+c.massj);
-      //not-implemented: freeze_group_bit
-
-      double deltan = radsum-r;
-
-      //derive contact model parameters (inlined)
-      //yeff, geff, betaeff, coeffFrict are constant lookup tables
-      double reff = c.radiusi * c.radiusj / (c.radiusi + c.radiusj);
-      double sqrtval = sqrt(reff * deltan);
-      double Sn = 2.    * yeff * sqrtval;
-      double St = 8.    * geff * sqrtval;
-      double kn = 4./3. * yeff * sqrtval;
-      double kt = St;
-      double gamman=-2.*sqrtFiveOverSix*betaeff*sqrt(Sn*meff);
-      double gammat=-2.*sqrtFiveOverSix*betaeff*sqrt(St*meff);
-      double xmu=coeffFrict;
-      //not-implemented if (dampflag == 0) gammat = 0;
-      kn /= nktv2p;
-      kt /= nktv2p;
-
-      double damp = gamman*vnnr*rsqinv;
-      double ccel = kn*(radsum-r)*rinv - damp;
-
-      //not-implemented cohesionflag
-
-      // relative velocities
-      double vtr1 = vt1 - (delz*wr2-dely*wr3);
-      double vtr2 = vt2 - (delx*wr3-delz*wr1);
-      double vtr3 = vt3 - (dely*wr1-delx*wr2);
-
-      // shear history effects
-      shear[(idx*3)  ] += vtr1 * dt;
-      shear[(idx*3)+1] += vtr2 * dt;
-      shear[(idx*3)+2] += vtr3 * dt;
-
-      // rotate shear displacements
-      double rsht = shear[(idx*3)  ]*delx + 
-                    shear[(idx*3)+1]*dely + 
-                    shear[(idx*3)+2]*delz;
-      rsht *= rsqinv;
-
-      shear[(idx*3)  ] -= rsht*delx;
-      shear[(idx*3)+1] -= rsht*dely;
-      shear[(idx*3)+2] -= rsht*delz;
-
-      // tangential forces = shear + tangential velocity damping
-      double fs1 = - (kt*shear[(idx*3)  ] + gammat*vtr1);
-      double fs2 = - (kt*shear[(idx*3)+1] + gammat*vtr2);
-      double fs3 = - (kt*shear[(idx*3)+2] + gammat*vtr3);
-
-      // rescale frictional displacements and forces if needed
-      double fs = sqrt(fs1*fs1 + fs2*fs2 + fs3*fs3);
-      double fn = xmu * fabs(ccel*r);
-      double shrmag = 0;
-      if (fs > fn) {
-        shrmag = sqrt(shear[(idx*3)  ]*shear[(idx*3)  ] +
-                      shear[(idx*3)+1]*shear[(idx*3)+1] +
-                      shear[(idx*3)+2]*shear[(idx*3)+2]);
-        if (shrmag != 0.0) {
-          shear[(idx*3)  ] = (fn/fs) * (shear[(idx*3)  ] + gammat*vtr1/kt) - gammat*vtr1/kt;
-          shear[(idx*3)+1] = (fn/fs) * (shear[(idx*3)+1] + gammat*vtr2/kt) - gammat*vtr2/kt;
-          shear[(idx*3)+2] = (fn/fs) * (shear[(idx*3)+2] + gammat*vtr3/kt) - gammat*vtr3/kt;
-          fs1 *= fn/fs;
-          fs2 *= fn/fs;
-          fs3 *= fn/fs;
-        } else {
-          fs1 = fs2 = fs3 = 0.0;
-        }
-      }
-
-      double fx = delx*ccel + fs1;
-      double fy = dely*ccel + fs2;
-      double fz = delz*ccel + fs3;
-
-      double tor1 = rinv * (dely*fs3 - delz*fs2);
-      double tor2 = rinv * (delz*fs1 - delx*fs3);
-      double tor3 = rinv * (delx*fs2 - dely*fs1);
-
-      // this is what we've been working up to!
-      force[idx].x = fx;
-      force[idx].y = fy;
-      force[idx].z = fz;
-
-      torque[idx].x -= c.radiusi*tor1;
-      torque[idx].y -= c.radiusi*tor2;
-      torque[idx].z -= c.radiusi*tor3;
-
-      torquej[idx].x -= c.radiusj*tor1;
-      torquej[idx].y -= c.radiusj*tor2;
-      torquej[idx].z -= c.radiusj*tor3;
-
-#if 0
-      cuPrintf("force' = {%f, %f, %f}\n",
-        force[idx].x, force[idx].y, force[idx].z);
-      cuPrintf("torque' = {%f, %f, %f}\n",
-        torque[idx].x, torque[idx].y, torque[idx].z);
-      cuPrintf("torquej' = {%f, %f, %f}\n",
-        torquej[idx].x, torquej[idx].y, torquej[idx].z);
-      cuPrintf("shear' = {%f, %f, %f}\n",
         shear[(idx*3)], shear[(idx*3)+1], shear[(idx*3)+2]);
 #endif
-    }
+
+    pair_interaction(
+#ifdef DEBUG
+        i,j,
+#endif
+        c.xi, c.xj,
+        c.vi, c.vj,
+        c.omegai, c.omegaj,
+        c.radiusi, c.radiusj,
+        c.massi, c.massj,
+        c.typei, c.typej,
+        &shear[(idx*3)],
+        &force[(idx*3)], /*forcej is */NULL,
+        &torque[(idx*3)], &torquej[(idx*3)]);
+
+#if 0
+    cuPrintf("force' = {%f, %f, %f}\n",
+        force[(idx*3)], force[(idx*3)+1], force[(idx*3)+2]);
+    cuPrintf("torque' = {%f, %f, %f}\n",
+        torque[(idx*3)], torque[(idx*3)+1], torque[(idx*3)+2]);
+    cuPrintf("torquej' = {%f, %f, %f}\n",
+        torquej[(idx*3)], torquej[(idx*3)+1], torquej[(idx*3)+2]);
+    cuPrintf("shear' = {%f, %f, %f}\n",
+        shear[(idx*3)], shear[(idx*3)+1], shear[(idx*3)+2]);
+#endif
   }
 }
 
-__global__ void gather_kernel(
+__global__ void collect_kernel(
   int nparticles,
-  double3 *force_delta, double3 *torquei_delta, double3 *torquej_delta,
+  double *force_delta, double *torquei_delta, double *torquej_delta,
   int *ioffset, int *icount, int *imapinv,
   int *joffset, int *jcount, int *jmapinv,
   //outputs
@@ -264,26 +140,26 @@ __global__ void gather_kernel(
     int ioff = ioffset[idx];
     for (int i=0; i<icount[idx]; i++) {
       int e = imapinv[ioff+i];
-      fdelta[0] += force_delta[e].x;
-      fdelta[1] += force_delta[e].y;
-      fdelta[2] += force_delta[e].z;
+      fdelta[0] += force_delta[(e*3)  ];
+      fdelta[1] += force_delta[(e*3)+1];
+      fdelta[2] += force_delta[(e*3)+2];
 
-      tdelta[0] += torquei_delta[e].x;
-      tdelta[1] += torquei_delta[e].y;
-      tdelta[2] += torquei_delta[e].z;
+      tdelta[0] += torquei_delta[(e*3)  ];
+      tdelta[1] += torquei_delta[(e*3)+1];
+      tdelta[2] += torquei_delta[(e*3)+2];
     }
 
     int joff = joffset[idx];
     for (int i=0; i<jcount[idx]; i++) {
       int e = jmapinv[joff+i];
 
-      fdelta[0] -= force_delta[e].x;
-      fdelta[1] -= force_delta[e].y;
-      fdelta[2] -= force_delta[e].z;
+      fdelta[0] -= force_delta[(e*3)  ];
+      fdelta[1] -= force_delta[(e*3)+1];
+      fdelta[2] -= force_delta[(e*3)+2];
 
-      tdelta[0] += torquej_delta[e].x;
-      tdelta[1] += torquej_delta[e].y;
-      tdelta[2] += torquej_delta[e].z;
+      tdelta[0] += torquej_delta[(e*3)  ];
+      tdelta[1] += torquej_delta[(e*3)+1];
+      tdelta[2] += torquej_delta[(e*3)+2];
     }
 
     //output
@@ -321,7 +197,7 @@ void run(struct params *input, int num_iter) {
     int i = input->edge[(e*2)];
     int j = input->edge[(e*2)+1];
 
-#ifdef AOS_EXTRA_DEBUG
+#ifdef DEBUG
     aos[e].i = i;
     aos[e].j = j;
 #endif
@@ -367,10 +243,10 @@ void run(struct params *input, int num_iter) {
 
   one_time.push_back(SimpleTimer("malloc_on_dev"));
   one_time.back().start();
-  double3 *d_force_delta;
-  double3 *d_torquei_delta;
-  double3 *d_torquej_delta;
-  const int d_delta_size = input->nedge * sizeof(double3);
+  double *d_force_delta;
+  double *d_torquei_delta;
+  double *d_torquej_delta;
+  const int d_delta_size = input->nedge * 3 *sizeof(double);
   ASSERT_NO_CUDA_ERROR(
     cudaMalloc((void **)&d_force_delta, d_delta_size));
   ASSERT_NO_CUDA_ERROR(
@@ -466,7 +342,7 @@ void run(struct params *input, int num_iter) {
 
   per_iter.push_back(SimpleTimer("aos_memcpy_to_dev"));
   per_iter.push_back(SimpleTimer("compute_kernel"));
-  per_iter.push_back(SimpleTimer("gather_kernel"));
+  per_iter.push_back(SimpleTimer("collect_kernel"));
   per_iter.push_back(SimpleTimer("result_fetch"));
 
   for (int run=0; run<num_iter; run++) {
@@ -533,7 +409,7 @@ void run(struct params *input, int num_iter) {
     const int gatherBlockSize = 128;
     dim3 gatherGridSize((input->nnode / gatherBlockSize)+1);
     per_iter[2].start();
-    gather_kernel<<<gatherGridSize, gatherBlockSize>>>(
+    collect_kernel<<<gatherGridSize, gatherBlockSize>>>(
       input->nnode,
       d_force_delta, d_torquei_delta, d_torquej_delta,
       d_ioffset, d_icount, d_imapinv,
