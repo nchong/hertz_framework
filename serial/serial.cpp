@@ -192,8 +192,12 @@ void run(struct params *input, int num_iter) {
 
   per_iter.push_back(SimpleTimer("kernel"));
 
-  for (int run=0; run<num_iter; run++) {
+  //internal copies of outputs
+  double *force = new double[input->nnode*3];
+  double *torque = new double[input->nnode*3];
+  double *shear = new double[input->nedge*3];
 
+  for (int run=0; run<num_iter; run++) {
     //setup constants
     dt = input->dt;
     nktv2p = input->nktv2p;
@@ -208,6 +212,7 @@ void run(struct params *input, int num_iter) {
     double *torque = new double[input->nnode*3];
     double *shear = new double[input->nedge*3];
 
+    //make copies
     for (int n=0; n<input->nnode*3; n++) {
       force[n] = input->force[n];
       torque[n] = input->torque[n];
@@ -260,4 +265,8 @@ void run(struct params *input, int num_iter) {
     }
 
   }
+
+  delete[] force;
+  delete[] torque;
+  delete[] shear;
 }

@@ -183,6 +183,7 @@ int main(int argc, char **argv) {
   }
   printf("\n");
 
+  delete_params(p);
   return 0;
 
 }

@@ -1,7 +1,7 @@
 #include "inverse_map.h"
 #include <assert.h>
 
-#define SPARSE_IMAP_WIDTH 32
+#define SPARSE_IMAP_WIDTH 128
 
 int *exclusive_scan(int *array, int n) {
   int *result = new int[n];
