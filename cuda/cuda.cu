@@ -186,7 +186,7 @@ void run(struct params *input, int num_iter) {
   //Hertz constants
   one_time.push_back(SimpleTimer("hertz_consts"));
   one_time.back().start();
-  setup_hertz_constants();
+  setup_hertz_constants(input);
   one_time.back().stop_and_add_to_total();
 
   //AoS generate
