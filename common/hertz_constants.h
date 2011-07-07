@@ -5,6 +5,7 @@
 
 #ifdef __CUDACC__
 #include "cuda_common.h"
+#include "unpickle.h"
 
 __constant__ double d_dt;
 __constant__ double d_nktv2p;

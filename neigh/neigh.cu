@@ -187,12 +187,6 @@ __global__ void compute_kernel_tpa(
       torque_sum[1] += torque_deltai[1];
       torque_sum[2] += torque_deltai[2];
 
-      if (idx==10) {
-        cuPrintf("%.16f, %.16f, %.16f\n", force_deltai[0], force_deltai[1], force_deltai[2]);
-      } else if (neigh_idx==10) {
-        cuPrintf("%.16f, %.16f, %.16f\n", -force_deltai[0], -force_deltai[1], -force_deltai[2]);
-      }
-
     }
     force[(idx*3)  ] += force_sum[0];
     force[(idx*3)+1] += force_sum[1];

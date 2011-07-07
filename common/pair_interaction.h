@@ -6,6 +6,8 @@
   #include <math.h>
 #endif
 
+#ifdef DEBUG
+#define WATCHI 10
 #define DEBUG_PRINT_INPUTS(printi) {                    \
   if (i == printi || j == printi) {                     \
     cuPrintf("i = %d; j = %d;\n", i, j);                \
@@ -50,6 +52,7 @@
         shear[0], shear[1], shear[2]);                  \
   }                                                     \
 } while(0);
+#endif
 
 #ifdef __CUDACC__
   __device__ 
@@ -87,7 +90,9 @@
     shear[1] = 0.0;
     shear[2] = 0.0;
   } else {
-
+#ifdef DEBUG
+    DEBUG_PRINT_INPUTS(WATCHI);
+#endif
     //distance between centres of atoms i and j
     //or, magnitude of del vector
     double r = sqrt(rsq);
@@ -218,6 +223,10 @@
       torquej[1] -= crj*tor2;
       torquej[2] -= crj*tor3;
     }
+
+#ifdef DEBUG
+    DEBUG_PRINT_OUTPUTS(WATCHI);
+#endif
 
   }
 }
