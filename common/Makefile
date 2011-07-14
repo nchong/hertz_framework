@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-MODULES = unpickle.o check_result_vector.o inverse_map.o
+MODULES = unpickle.o check_result_vector.o inverse_map.o neigh_list.o
 
 libcommon.so: $(MODULES)
 	$(CXX) $(CXXFLAGS) -shared $^ -o $@
