@@ -209,3 +209,44 @@ void NeighListLike::test_against(struct params *input) {
   delete[] edge;
   delete[] shear;
 }
+
+void NeighListLike::copy_into(
+  double **&firstdouble_copy,
+  double **&dpages_copy,
+  int    **&firsttouch_copy,
+  int    **&tpages_copy) {
+  //all null or initialized
+  assert((firstdouble_copy == NULL && dpages_copy == NULL &&
+          firsttouch_copy  == NULL && tpages_copy == NULL) ||
+         (firstdouble_copy && dpages_copy &&
+          firsttouch_copy && tpages_copy));
+
+  if (firstdouble_copy == NULL && dpages_copy == NULL &&
+      firsttouch_copy  == NULL && tpages_copy == NULL) {
+    firstdouble_copy = new double*[maxlocal];
+    assert(firstdouble_copy);
+    firsttouch_copy = new int*[maxlocal];
+    assert(firsttouch_copy);
+
+    dpages_copy = new double*[maxpage];
+    assert(dpages_copy);
+    tpages_copy = new int*[maxpage];
+    assert(tpages_copy);
+
+    for (int p=0; p<maxpage; p++) {
+      dpages_copy[p] = new double[pgsize*3];
+      assert(dpages_copy[p]);
+      tpages_copy[p] = new int[pgsize];
+      assert(tpages_copy[p]);
+    }
+  }
+
+  std::copy(firstdouble, firstdouble+maxlocal, firstdouble_copy);
+  std::copy(firsttouch,  firsttouch+maxlocal,  firsttouch_copy);
+  std::copy(dpages, dpages+maxpage, dpages_copy);
+  std::copy(tpages, tpages+maxpage, tpages_copy);
+  for (int p=0; p<maxpage; p++) {
+    std::copy(dpages[p], dpages[p]+(pgsize*3), dpages_copy[p]);
+    std::copy(tpages[p], tpages[p]+(pgsize  ), tpages_copy[p]);
+  }
+}

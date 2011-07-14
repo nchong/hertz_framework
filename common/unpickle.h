@@ -79,6 +79,8 @@ class NeighListLike {
     double **dpages;
     int    **tpages;
 
+    void copy_into(double **&, double **&, int **&, int **&);
+
   private:
     void allocate(int N);
     void add_pages();
