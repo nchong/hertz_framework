@@ -237,24 +237,6 @@ void run(struct params *input, int num_iter) {
         );
       }
     }
-#if 0
-    for (int e=0; e<input->nedge; e++) {
-      int i = input->edge[(e*2)];
-      int j = input->edge[(e*2)+1];
-      pair_interaction(
-        i, j,
-        &input->x[(i*3)],     &input->x[(j*3)],
-        &input->v[(i*3)],     &input->v[(j*3)],
-        &input->omega[(i*3)], &input->omega[(j*3)],
-         input->radius[i],     input->radius[j],
-         input->mass[i],       input->mass[j],
-         input->type[i],       input->type[j],
-        &shear[(e*3)],
-        &force[(i*3)],        &force[(j*3)],
-        &torque[(i*3)],       &torque[(j*3)]
-      );
-    }
-#endif
     per_iter[0].stop_and_add_to_total();
 
     //only check results the first time around
