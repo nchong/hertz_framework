@@ -185,6 +185,16 @@ inline void pair_interaction(
 }
 
 void run(struct params *input, int num_iter) {
+  //setup constants
+  dt = input->dt;
+  nktv2p = input->nktv2p;
+  yeff = input->yeff[3];
+  geff = input->geff[3];
+  betaeff = input->betaeff[3];
+  coeffFrict = input->coeffFrict[3];
+
+  //neighbor list
+  NeighListLike *nl = new NeighListLike(input);
 
   //--------------------
   // Per-iteration costs
@@ -195,23 +205,39 @@ void run(struct params *input, int num_iter) {
   //internal copies of outputs
   double *force = new double[input->nnode*3];
   double *torque = new double[input->nnode*3];
-  double *shear = new double[input->nedge*3];
+  double **firstdouble = NULL;
+  double **dpages = NULL;
+  int    **firsttouch = NULL;
+  int    **tpages = NULL;
 
   for (int run=0; run<num_iter; run++) {
-    //setup constants
-    dt = input->dt;
-    nktv2p = input->nktv2p;
-    yeff = input->yeff[3];
-    geff = input->geff[3];
-    betaeff = input->betaeff[3];
-    coeffFrict = input->coeffFrict[3];
-
     //make copies
     copy(input->force,  input->force  + input->nnode*3, force);
     copy(input->torque, input->torque + input->nnode*3, torque);
-    copy(input->shear,  input->shear  + input->nedge*3, shear);
+    nl->copy_into(firstdouble, dpages, firsttouch, tpages);
 
     per_iter[0].start();
+    for (int ii=0; ii<nl->inum; ii++) {
+      int i = nl->ilist[ii];
+      for (int jj=0; jj<nl->numneigh[i]; jj++) {
+        int j = nl->firstneigh[i][jj];
+        double *shear = &(firstdouble[i][3*jj]);
+        int *touch = &(firsttouch[i][jj]);
+        pair_interaction(
+          i, j,
+          &input->x[(i*3)],     &input->x[(j*3)],
+          &input->v[(i*3)],     &input->v[(j*3)],
+          &input->omega[(i*3)], &input->omega[(j*3)],
+           input->radius[i],     input->radius[j],
+           input->mass[i],       input->mass[j],
+           input->type[i],       input->type[j],
+           shear,
+          &force[(i*3)],        &force[(j*3)],
+          &torque[(i*3)],       &torque[(j*3)]
+        );
+      }
+    }
+#if 0
     for (int e=0; e<input->nedge; e++) {
       int i = input->edge[(e*2)];
       int j = input->edge[(e*2)+1];
@@ -228,6 +254,7 @@ void run(struct params *input, int num_iter) {
         &torque[(i*3)],       &torque[(j*3)]
       );
     }
+#endif
     per_iter[0].stop_and_add_to_total();
 
     //only check results the first time around
@@ -245,18 +272,36 @@ void run(struct params *input, int num_iter) {
             out.str().c_str(),
             &input->expected_torque[(n*3)], &torque[(n*3)]);
       }
+
+      int ptr = 0;
+      double *shear_check = new double[input->nedge*3];
+      for (int ii=0; ii<nl->inum; ii++) {
+        int i = nl->ilist[ii];
+        for (int jj=0; jj<nl->numneigh[i]; jj++) {
+          double *shear = &(firstdouble[i][3*jj]);
+          shear_check[(ptr*3)  ] = shear[0];
+          shear_check[(ptr*3)+1] = shear[1];
+          shear_check[(ptr*3)+2] = shear[2];
+          ptr++;
+        }
+      }
+      assert(ptr == input->nedge);
       for (int n=0; n<input->nedge; n++) {
         stringstream out;
         out << "shear[" << n << "]";
         check_result_vector(
             out.str().c_str(),
-            &input->expected_shear[(n*3)], &shear[(n*3)]);
+            &input->expected_shear[(n*3)], &shear_check[(n*3)]);
       }
+      delete[] shear_check;
     }
 
   }
 
   delete[] force;
   delete[] torque;
-  delete[] shear;
+  delete[] firstdouble;
+  delete[] dpages;
+  delete[] firsttouch;
+  delete[] tpages;
 }
