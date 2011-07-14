@@ -206,19 +206,10 @@ void run(struct params *input, int num_iter) {
     betaeff = input->betaeff[3];
     coeffFrict = input->coeffFrict[3];
 
-    //make some internal copies
-    double *force = new double[input->nnode*3];
-    double *torque = new double[input->nnode*3];
-    double *shear = new double[input->nedge*3];
-
     //make copies
-    for (int n=0; n<input->nnode*3; n++) {
-      force[n] = input->force[n];
-      torque[n] = input->torque[n];
-    }
-    for (int e=0; e<input->nedge*3; e++) {
-      shear[e] = input->shear[e];
-    }
+    copy(input->force,  input->force  + input->nnode*3, force);
+    copy(input->torque, input->torque + input->nnode*3, torque);
+    copy(input->shear,  input->shear  + input->nedge*3, shear);
 
     per_iter[0].start();
     for (int e=0; e<input->nedge; e++) {
