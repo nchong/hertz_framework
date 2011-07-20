@@ -171,6 +171,24 @@ void NeighListLike::fill(struct params *input) {
     assert(numneigh[i] < oneatom);
     npnt++;
   }
+
+  //fix-up neighbor list so there are no NULL values
+  for (int ii=0; ii<inum; ii++) {
+    int i = ilist[ii];
+    if (firstneigh[i] == NULL) {
+      if (i == 0) {
+        firstneigh[i] = pages[0];
+      } else {
+        int j = i;
+        do {
+          j--;
+          assert(j > 0);
+        } while (firstneigh[j] == NULL);
+        firstneigh[i] = firstneigh[j] + numneigh[j];
+      }
+    }
+    assert(firstneigh[i] != NULL);
+  }
 }
 
 void NeighListLike::test_against(struct params *input) {
