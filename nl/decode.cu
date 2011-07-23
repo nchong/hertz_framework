@@ -7,7 +7,7 @@
 #include <thrust/scan.h>
 #include "cuda_common.h"
 
-//#define DEBUG //< sanity check neighbor list construction
+#define DEBUG //< sanity check neighbor list construction
 
 /*
  * For each particle (tid) determine which page of the CPU neighbor list
@@ -99,6 +99,22 @@ class GpuNeighList {
     return ((double)sum_numneigh / (double)(nslot));
   }
 
+  template <class T>
+  inline void load_pages(T *d_ptr, T **h_ptr, int arity=1) {
+    for (int p=0; p<maxpage; p++) {
+      ASSERT_NO_CUDA_ERROR(
+        cudaMemcpy(&(d_ptr[p*pgsize*arity]), h_ptr[p], pgsize*sizeof(T)*arity, cudaMemcpyHostToDevice));
+    }
+  }
+
+  template <class T>
+  inline void unload_pages(T *d_ptr, T **h_ptr, int arity=1) {
+    for (int p=0; p<maxpage; p++) {
+      ASSERT_NO_CUDA_ERROR(
+        cudaMemcpy(h_ptr[p], &(d_ptr[p*pgsize*arity]), pgsize*sizeof(T)*arity, cudaMemcpyDeviceToHost));
+    }
+  }
+
   void reload(int *numneigh, int **firstneigh, int **pages) {
     //thrust versions of raw device pointers
     static thrust::device_ptr<int > thrust_numneigh(d_numneigh);
@@ -157,10 +173,7 @@ class GpuNeighList {
       thrust_numneigh,             //vals
       thrust_offset);              //output
 
-    for (int p=0; p<maxpage; p++) {
-      ASSERT_NO_CUDA_ERROR(
-        cudaMemcpy(&(d_neighidx[p*pgsize]), pages[p], pgsize * sizeof(int), cudaMemcpyHostToDevice));
-    }
+    load_pages<int>(d_neighidx, pages);
 
 #ifdef DEBUG
     // test equality
