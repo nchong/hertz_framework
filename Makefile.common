@@ -1,11 +1,31 @@
 CXX = g++
-CXXFLAGS = -O2
+override CXXFLAGS += -O2 -Wall -Wextra -Werror -pedantic
 
 NVCC = nvcc
 NVCCFLAGS = -arch=sm_13 #-O2
 NVCCFLAGS += ${CMDLINE_NVCCFLAGS}
 
 INCLUDEDIR = ../common
+
+# OPENCL LIBRARIES BASED ON OS
+UNAME := $(shell uname)
+ifeq ($(UNAME), Darwin)
+OPENCL_LIB = -framework OpenCL
+OPENCL_INC =
+SHARED = -dynamiclib
+endif
+
+ifeq ($(UNAME), Linux)
+.PHONY: .check-env
+AMDAPP ?= /opt/AMDAPP/include
+.check-env:
+	@if [ ! -d "${AMDAPP}" ]; then \
+		echo "ERROR: set AMDAPP variable."; exit 1; \
+	fi
+OPENCL_LIB = -l OpenCL 
+OPENCL_INC = -I ${AMDAPP}
+SHARED = -shared
+endif
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -fPIC -c $<
