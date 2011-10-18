@@ -149,19 +149,19 @@ int main(int argc, char **argv) {
   run(p, num_iter);
   double one_time_total = 0.0f;
   double per_iter_total = 0.0f;
-  for (int i=0; i<one_time.size(); i++) {
+  for (int i=0; i<(int)one_time.size(); i++) {
     one_time_total += one_time[i].total_time();
   }
-  for (int i=0; i<per_iter.size(); i++) {
+  for (int i=0; i<(int)per_iter.size(); i++) {
     per_iter_total += per_iter[i].total_time();
   }
 
   if (verbose) { //then print header
     printf("# nedge, total_one_time_cost (milliseconds), time_per_iteration");
-    for (int i=0; i<one_time.size(); i++) {
+    for (int i=0; i<(int)one_time.size(); i++) {
       printf(", [%s]", one_time[i].get_name().c_str());
     }
-    for (int i=0; i<per_iter.size(); i++) {
+    for (int i=0; i<(int)per_iter.size(); i++) {
       printf(", %s", per_iter[i].get_name().c_str());
     }
     if (seed != -1) {
@@ -172,10 +172,10 @@ int main(int argc, char **argv) {
 
   // print runtime data
   printf("%d, %f, %f", p->nedge, one_time_total, per_iter_total / (double) num_iter);
-  for (int i=0; i<one_time.size(); i++) {
+  for (int i=0; i<(int)one_time.size(); i++) {
     printf(", %f", one_time[i].total_time());
   }
-  for (int i=0; i<per_iter.size(); i++) {
+  for (int i=0; i<(int)per_iter.size(); i++) {
     printf(", %f", per_iter[i].total_time() / (double) num_iter);
   }
   if (seed != -1) {
