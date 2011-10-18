@@ -8,4 +8,4 @@ NVCCFLAGS += ${CMDLINE_NVCCFLAGS}
 INCLUDEDIR = ../common
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -fpic -c $<
+	$(CXX) $(CXXFLAGS) -fPIC -c $<
