@@ -27,16 +27,19 @@ double betaeff;
 double coeffFrict;
 
 inline void pair_interaction(
+#if DEBUG
     int i, int j,
+#endif
   //inputs
     double *xi, double *xj,           //position
     double *vi, double *vj,           //velocity
     double *omegai, double *omegaj,   //rotational velocity
     double radi, double radj,         //radius
     double massi, double massj,       //mass
-    int typei, int typej,             //type
+    int /*typei unused*/, int /*typej unused*/,             //type
   //inouts
     double *shear,
+    int *touch,
     double *forcei,
     double *forcej,
     double *torquei,
@@ -51,6 +54,7 @@ inline void pair_interaction(
   double radsum = radi + radj;
   if (rsq >= radsum*radsum) {
     //unset non-touching atoms
+    *touch = 0;
     shear[0] = 0.0;
     shear[1] = 0.0;
     shear[2] = 0.0;
@@ -224,14 +228,16 @@ void run(struct params *input, int num_iter) {
         double *shear = &(firstdouble[i][3*jj]);
         int *touch = &(firsttouch[i][jj]);
         pair_interaction(
+#if DEBUG
           i, j,
+#endif
           &input->x[(i*3)],     &input->x[(j*3)],
           &input->v[(i*3)],     &input->v[(j*3)],
           &input->omega[(i*3)], &input->omega[(j*3)],
            input->radius[i],     input->radius[j],
            input->mass[i],       input->mass[j],
            input->type[i],       input->type[j],
-           shear,
+           shear, touch,
           &force[(i*3)],        &force[(j*3)],
           &torque[(i*3)],       &torque[(j*3)]
         );
@@ -239,6 +245,7 @@ void run(struct params *input, int num_iter) {
     }
     per_iter[0].stop_and_add_to_total();
 
+#if 0
     //only check results the first time around
     if (run == 0) {
       for (int n=0; n<input->nnode; n++) {
@@ -277,6 +284,7 @@ void run(struct params *input, int num_iter) {
       }
       delete[] shear_check;
     }
+#endif
 
   }
 

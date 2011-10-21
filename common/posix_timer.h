@@ -57,9 +57,9 @@ class SimpleTimer {
     inline void set_total_time(double t) { _total_time = t; };
 
   private:
-    std::string _name;
     struct timespec _start, _end;
     double _total_time;
+    std::string _name;
 };
 
 #endif
