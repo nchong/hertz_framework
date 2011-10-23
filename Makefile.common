@@ -1,11 +1,20 @@
+# COMPILE OPTIONS
+ifeq ($(CXX), icc)
+CXX = icc
+override CXXFLAGS += -O2
+override CXXFLAGS += -Wall -Wcheck
+else
 CXX = g++
-override CXXFLAGS += -O2 -Wall -Wextra -Werror -pedantic
+override CXXFLAGS += -O2
+override CXXFLAGS += -Wall -Wextra -Werror -pedantic -Wno-variadic-macros
+endif
+LOG_LEVEL = LOG_WARN
+override CXXFLAGS += -DLOG_LEVEL=$(LOG_LEVEL)
+override CXXFLAGS += -fPIC
 
 NVCC = nvcc
 NVCCFLAGS = -arch=sm_13 #-O2
 NVCCFLAGS += ${CMDLINE_NVCCFLAGS}
-
-INCLUDEDIR = ../common
 
 # OPENCL LIBRARIES BASED ON OS
 UNAME := $(shell uname)
@@ -22,10 +31,12 @@ AMDAPP ?= /opt/AMDAPP/include
 	@if [ ! -d "${AMDAPP}" ]; then \
 		echo "ERROR: set AMDAPP variable."; exit 1; \
 	fi
-OPENCL_LIB = -l OpenCL 
+OPENCL_LIB = -lOpenCL 
 OPENCL_INC = -I ${AMDAPP}
 SHARED = -shared
 endif
 
+INCLUDEDIR = ../common
+
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -fPIC -c $<
+	$(CXX) $(CXXFLAGS) -c $<
