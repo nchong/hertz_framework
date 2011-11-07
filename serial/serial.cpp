@@ -11,11 +11,13 @@
   #include "simple_timer.h"
 #endif
 
-#include "check_result_vector.h"
 #include "framework.h"
 #include "hertz_constants.h"
 #include <math.h>
-#include <sstream>
+
+#if DEBUG
+#define TRACE 15
+#endif
 
 using namespace std;
 
@@ -44,6 +46,13 @@ inline void pair_interaction(
     double *forcej,
     double *torquei,
     double *torquej) {
+#if DEBUG
+  if (i == TRACE) {
+    printf("i is TRACE, j is %d: ", j);
+  } else if (j == TRACE) {
+    printf("i is %d, j is TRACE: ", i);
+  }
+#endif
 
   // del is the vector from j to i
   double delx = xi[0] - xj[0];
@@ -58,6 +67,11 @@ inline void pair_interaction(
     shear[0] = 0.0;
     shear[1] = 0.0;
     shear[2] = 0.0;
+#if DEBUG
+    if (i == TRACE || j == TRACE) {
+      printf("miss\n");
+    }
+#endif
   } else {
     //distance between centres of atoms i and j
     //or, magnitude of del vector
@@ -173,6 +187,13 @@ inline void pair_interaction(
     forcei[0] += fx;
     forcei[1] += fy;
     forcei[2] += fz;
+#if DEBUG
+    if (i == TRACE) {
+      printf("hit %.16f\t%.16f\t%.16f\n", fx, fy, fz);
+    } else if (j == TRACE) {
+      printf("hit %.16f\t%.16f\t%.16f\n", -fx, -fy, -fz);
+    }
+#endif
 
     forcej[0] -= fx;
     forcej[1] -= fy;
@@ -220,6 +241,13 @@ void run(struct params *input, int num_iter) {
     copy(input->torque, input->torque + input->nnode*3, torque);
     nl->copy_into(firstdouble, dpages, firsttouch, tpages);
 
+#if DEBUG
+    if (run == 0) {
+      printf("DONE %.16f\t%.16f\t%.16f\n",
+        force[TRACE*3], force[(TRACE*3)+1], force[(TRACE*3)+2]);
+    }
+#endif
+
     per_iter[0].start();
     for (int ii=0; ii<nl->inum; ii++) {
       int i = nl->ilist[ii];
@@ -245,44 +273,19 @@ void run(struct params *input, int num_iter) {
     }
     per_iter[0].stop_and_add_to_total();
 
-#if 0
+#if DEBUG
+    if (run == 0) {
+      printf("DONE %.16f\t%.16f\t%.16f\n",
+        force[TRACE*3], force[(TRACE*3)+1], force[(TRACE*3)+2]);
+      printf("EXPT %.16f\t%.16f\t%.16f\n",
+        input->expected_force[TRACE*3], input->expected_force[(TRACE*3)+1], input->expected_force[(TRACE*3)+2]);
+    }
+#endif
+
+#if 1
     //only check results the first time around
     if (run == 0) {
-      for (int n=0; n<input->nnode; n++) {
-        std::stringstream out;
-        out << "force[" << n << "]";
-        check_result_vector(
-            out.str().c_str(),
-            &input->expected_force[(n*3)], &force[(n*3)]);
-        out.str("");
-
-        out << "torque[" << n << "]";
-        check_result_vector(
-            out.str().c_str(),
-            &input->expected_torque[(n*3)], &torque[(n*3)]);
-      }
-
-      int ptr = 0;
-      double *shear_check = new double[input->nedge*3];
-      for (int ii=0; ii<nl->inum; ii++) {
-        int i = nl->ilist[ii];
-        for (int jj=0; jj<nl->numneigh[i]; jj++) {
-          double *shear = &(firstdouble[i][3*jj]);
-          shear_check[(ptr*3)  ] = shear[0];
-          shear_check[(ptr*3)+1] = shear[1];
-          shear_check[(ptr*3)+2] = shear[2];
-          ptr++;
-        }
-      }
-      assert(ptr == input->nedge);
-      for (int n=0; n<input->nedge; n++) {
-        stringstream out;
-        out << "shear[" << n << "]";
-        check_result_vector(
-            out.str().c_str(),
-            &input->expected_shear[(n*3)], &shear_check[(n*3)]);
-      }
-      delete[] shear_check;
+      check_result(input, nl, force, torque, firstdouble);
     }
 #endif
 

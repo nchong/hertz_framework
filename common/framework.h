@@ -7,9 +7,11 @@
   #include "simple_timer.h"
 #endif
 
+#include "check_result_vector.h"
 #include "unpickle.h"
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -186,5 +188,45 @@ int main(int argc, char **argv) {
   delete_params(p);
   return 0;
 
+}
+
+void check_result(struct params *p, NeighListLike *nl,
+                  double *force, double *torque, double **shearlist,
+                  const double epsilon=0.00001, bool verbose=false, bool die_on_flag=true) {
+  for (int n=0; n<p->nnode; n++) {
+    std::stringstream out;
+    out << "force[" << n << "]";
+    check_result_vector(
+        out.str().c_str(),
+        &p->expected_force[(n*3)], &force[(n*3)], epsilon, verbose, die_on_flag);
+    out.str("");
+
+    out << "torque[" << n << "]";
+    check_result_vector(
+        out.str().c_str(),
+        &p->expected_torque[(n*3)], &torque[(n*3)], epsilon, verbose, die_on_flag);
+  }
+
+  int ptr = 0;
+  double *shear_check = new double[p->nedge*3];
+  for (int ii=0; ii<nl->inum; ii++) {
+    int i = nl->ilist[ii];
+    for (int jj=0; jj<nl->numneigh[i]; jj++) {
+      double *shear = &(shearlist[i][3*jj]);
+      shear_check[(ptr*3)  ] = shear[0];
+      shear_check[(ptr*3)+1] = shear[1];
+      shear_check[(ptr*3)+2] = shear[2];
+      ptr++;
+    }
+  }
+  assert(ptr == p->nedge);
+  for (int n=0; n<p->nedge; n++) {
+    std::stringstream out;
+    out << "shear[" << n << "]";
+    check_result_vector(
+        out.str().c_str(),
+        &p->expected_shear[(n*3)], &shear_check[(n*3)], epsilon, verbose, die_on_flag);
+  }
+  delete[] shear_check;
 }
 #endif
