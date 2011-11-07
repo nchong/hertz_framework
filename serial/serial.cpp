@@ -15,10 +15,6 @@
 #include "hertz_constants.h"
 #include <math.h>
 
-#if DEBUG
-#define TRACE 15
-#endif
-
 using namespace std;
 
 double dt;
@@ -29,7 +25,7 @@ double betaeff;
 double coeffFrict;
 
 inline void pair_interaction(
-#if DEBUG
+#ifdef TRACE
     int i, int j,
 #endif
   //inputs
@@ -46,7 +42,7 @@ inline void pair_interaction(
     double *forcej,
     double *torquei,
     double *torquej) {
-#if DEBUG
+#ifdef TRACE
   if (i == TRACE) {
     printf("i is TRACE, j is %d: ", j);
   } else if (j == TRACE) {
@@ -67,7 +63,7 @@ inline void pair_interaction(
     shear[0] = 0.0;
     shear[1] = 0.0;
     shear[2] = 0.0;
-#if DEBUG
+#ifdef TRACE
     if (i == TRACE || j == TRACE) {
       printf("miss\n");
     }
@@ -187,7 +183,7 @@ inline void pair_interaction(
     forcei[0] += fx;
     forcei[1] += fy;
     forcei[2] += fz;
-#if DEBUG
+#ifdef TRACE
     if (i == TRACE) {
       printf("hit %.16f\t%.16f\t%.16f\n", fx, fy, fz);
     } else if (j == TRACE) {
@@ -241,9 +237,9 @@ void run(struct params *input, int num_iter) {
     copy(input->torque, input->torque + input->nnode*3, torque);
     nl->copy_into(firstdouble, dpages, firsttouch, tpages);
 
-#if DEBUG
+#ifdef TRACE
     if (run == 0) {
-      printf("DONE %.16f\t%.16f\t%.16f\n",
+      printf("INIT %.16f\t%.16f\t%.16f\n",
         force[TRACE*3], force[(TRACE*3)+1], force[(TRACE*3)+2]);
     }
 #endif
@@ -256,7 +252,7 @@ void run(struct params *input, int num_iter) {
         double *shear = &(firstdouble[i][3*jj]);
         int *touch = &(firsttouch[i][jj]);
         pair_interaction(
-#if DEBUG
+#ifdef TRACE
           i, j,
 #endif
           &input->x[(i*3)],     &input->x[(j*3)],
@@ -273,7 +269,7 @@ void run(struct params *input, int num_iter) {
     }
     per_iter[0].stop_and_add_to_total();
 
-#if DEBUG
+#ifdef TRACE
     if (run == 0) {
       printf("DONE %.16f\t%.16f\t%.16f\n",
         force[TRACE*3], force[(TRACE*3)+1], force[(TRACE*3)+2]);
@@ -282,7 +278,7 @@ void run(struct params *input, int num_iter) {
     }
 #endif
 
-#if 1
+#if CHECK
     //only check results the first time around
     if (run == 0) {
       check_result(input, nl, force, torque, firstdouble);
