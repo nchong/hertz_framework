@@ -18,7 +18,7 @@ if [ -z "${OUTPUT}" ]; then
 fi
 rm -f ${OUTPUT}
 
-for j in {1..10}; do
+for j in {1..13}; do
   if [ -z "${CUDA_PROFILE}" ]; then
     export CUDA_PROFILE_LOG="cuda_profile.$j.log"
     rm -f ${CUDA_PROFILE_LOG}
