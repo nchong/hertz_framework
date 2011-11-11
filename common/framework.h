@@ -7,8 +7,8 @@
   #include "simple_timer.h"
 #endif
 
-#include "check_result_vector.h"
 #include "unpickle.h"
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -190,23 +190,46 @@ int main(int argc, char **argv) {
 
 }
 
+double percentage_error(double const&expected, double const &computed) {
+  return (100.0 * fabs(computed-expected)/expected);
+}
+
+double compare(const char *tag, double const&expected, double const&computed,
+               const double threshold,
+               bool verbose, bool die_on_flag) {
+  static int num_bad = 0;
+
+  double error = percentage_error(expected, computed);
+  bool flag = (error > threshold);
+  if (flag) {
+    num_bad++;
+  }
+  if (flag || verbose) {
+    printf("%s\t%.16f\t%.16f\t%f\t%d\n", tag, expected, computed, error, num_bad);
+  }
+  if (flag && die_on_flag) {
+    exit(1);
+  }
+  return error;
+}
+
 void check_result(struct params *p, NeighListLike *nl,
                   double *force, double *torque, double **shearlist,
-                  const double epsilon=0.00001, bool verbose=false, bool die_on_flag=true) {
-  for (int n=0; n<p->nnode; n++) {
-    std::stringstream out;
-    out << "force[" << n << "]";
-    check_result_vector(
-        out.str().c_str(),
-        &p->expected_force[(n*3)], &force[(n*3)], epsilon, verbose, die_on_flag);
-    out.str("");
-
-    out << "torque[" << n << "]";
-    check_result_vector(
-        out.str().c_str(),
-        &p->expected_torque[(n*3)], &torque[(n*3)], epsilon, verbose, die_on_flag);
+                  const double threshold=0.5, bool verbose=false, bool die_on_flag=true) {
+  for (int i=0; i<p->nnode*3; i++) {
+    std::stringstream tag;
+    tag << "force[" << i << "]";
+    compare(tag.str().c_str(),
+            p->expected_force[i], force[i],
+            threshold, verbose, die_on_flag);
   }
-
+  for (int i=0; i<p->nnode*3; i++) {
+    std::stringstream tag;
+    tag << "torque[" << i << "]";
+    compare(tag.str().c_str(),
+            p->expected_torque[i], torque[i],
+            threshold, verbose, die_on_flag);
+  }
   int ptr = 0;
   double *shear_check = new double[p->nedge*3];
   for (int ii=0; ii<nl->inum; ii++) {
@@ -220,12 +243,12 @@ void check_result(struct params *p, NeighListLike *nl,
     }
   }
   assert(ptr == p->nedge);
-  for (int n=0; n<p->nedge; n++) {
-    std::stringstream out;
-    out << "shear[" << n << "]";
-    check_result_vector(
-        out.str().c_str(),
-        &p->expected_shear[(n*3)], &shear_check[(n*3)], epsilon, verbose, die_on_flag);
+  for (int i=0; i<p->nedge; i++) {
+    std::stringstream tag;
+    tag << "shear[" << i << "]";
+    compare(tag.str().c_str(),
+            p->expected_shear[i], shear_check[i],
+            threshold, verbose, die_on_flag);
   }
   delete[] shear_check;
 }

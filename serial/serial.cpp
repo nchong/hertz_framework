@@ -278,13 +278,10 @@ void run(struct params *input, int num_iter) {
     }
 #endif
 
-#if CHECK
     //only check results the first time around
     if (run == 0) {
       check_result(input, nl, force, torque, firstdouble);
     }
-#endif
-
   }
 
   delete[] force;
