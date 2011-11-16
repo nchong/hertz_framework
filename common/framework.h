@@ -11,12 +11,24 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <sched.h>
 #include <sstream>
 #include <string>
 #include <vector>
 
 std::vector<SimpleTimer> one_time;
 std::vector<SimpleTimer> per_iter;
+
+int rand_int(int n);
+void shuffle_edges(int *edges, int nedge);
+void print_usage(std::string progname);
+double percentage_error(double const&expected, double const &computed);
+double compare(const char *tag,
+    double const&expected, double const&computed, const double threshold,
+    bool verbose, bool die_on_flag);
+void check_result(struct params *p, NeighListLike *nl,
+    double *force, double *torque, double **shearlist,
+    const double threshold=0.5, bool verbose=false, bool die_on_flag=true);
 
 /* return a random integer in [0..n) */
 int rand_int(int n) {
@@ -61,6 +73,12 @@ void print_usage(std::string progname) {
 }
 
 int main(int argc, char **argv) {
+  // only run on main CPU
+  cpu_set_t mask;
+  CPU_ZERO(&mask);
+  CPU_SET(0, &mask);
+  int err = sched_setaffinity(0, sizeof(mask), &mask);
+  assert(err == 0);
 
   // PARSE CMDLINE
   std::string progname(argv[0]);
@@ -122,8 +140,10 @@ int main(int argc, char **argv) {
   }
 
   if (debug) {
+    const char *sname = step_filename.c_str();
+    const char *pname = part_filename.c_str();
     printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld\n",
-        step_filename.c_str(), verbose, num_iter, part_filename.c_str(), seed);
+        sname, verbose, num_iter, pname, seed);
     for (int i=optind; i<argc; i++)
       printf ("# Non-option argument: %s\n", argv[i]);
   }
@@ -191,7 +211,11 @@ int main(int argc, char **argv) {
 }
 
 double percentage_error(double const&expected, double const &computed) {
-  return (100.0 * fabs(computed-expected)/expected);
+  if (expected == computed) return 0.0;
+  // avoid div0 case (send back sentinel value instead)
+  // we know computed is not 0.0 because of case above
+  if (expected == 0.0) return 999.9;
+  return 100 * fabs((computed - expected) / expected);
 }
 
 double compare(const char *tag, double const&expected, double const&computed,
@@ -205,7 +229,7 @@ double compare(const char *tag, double const&expected, double const&computed,
     num_bad++;
   }
   if (flag || verbose) {
-    printf("%s\t%.16f\t%.16f\t%f\t%d\n", tag, expected, computed, error, num_bad);
+    printf("%s\t%e\t%e\t%e\t%d\n", tag, expected, computed, error, num_bad);
   }
   if (flag && die_on_flag) {
     exit(1);
@@ -215,7 +239,7 @@ double compare(const char *tag, double const&expected, double const&computed,
 
 void check_result(struct params *p, NeighListLike *nl,
                   double *force, double *torque, double **shearlist,
-                  const double threshold=0.5, bool verbose=false, bool die_on_flag=true) {
+                  const double threshold, bool verbose, bool die_on_flag) {
   for (int i=0; i<p->nnode*3; i++) {
     std::stringstream tag;
     tag << "force[" << i << "]";
