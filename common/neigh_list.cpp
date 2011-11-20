@@ -28,9 +28,10 @@ NeighListLike::~NeighListLike() {
     delete[] dpages[p];
     delete[] tpages[p];
   }
-  delete[] pages;
-  delete[] dpages;
-  delete[] tpages;
+  // nb: we free these because we malloc them (because we realloc them)
+  free(pages);
+  free(dpages);
+  free(tpages);
 }
 
 void NeighListLike::allocate(int N) {
@@ -55,11 +56,11 @@ void NeighListLike::allocate(int N) {
   firsttouch = new int*[maxlocal];
   assert(firsttouch);
 
-  pages = new int*[maxpage];
+  pages = (int **)malloc(sizeof(int*)*maxpage);
   assert(pages);
-  dpages = new double*[maxpage];
+  dpages = (double **)malloc(sizeof(double*)*maxpage);
   assert(dpages);
-  tpages = new int*[maxpage];
+  tpages = (int **)malloc(sizeof(int*)*maxpage);
   assert(tpages);
 
   for (int p=0; p<maxpage; p++) {
