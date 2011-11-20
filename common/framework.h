@@ -18,6 +18,7 @@
 
 std::vector<SimpleTimer> one_time;
 std::vector<SimpleTimer> per_iter;
+std::vector<std::vector<double> > per_iter_timings;
 
 int rand_int(int n);
 void shuffle_edges(int *edges, int nedge);
@@ -184,6 +185,12 @@ int main(int argc, char **argv) {
 
   // RUN TEST
   run(p, num_iter);
+
+  // PRINT TIMING RESULTS
+  assert(per_iter.size() == per_iter_timings.size());
+  for (int i=0; i<(int)per_iter_timings.size(); i++) {
+    assert(per_iter_timings[i].size() == num_iter);
+  }
   double one_time_total = 0.0f;
   double per_iter_total = 0.0f;
   for (int i=0; i<(int)one_time.size(); i++) {
@@ -213,12 +220,30 @@ int main(int argc, char **argv) {
     printf(", %f", one_time[i].total_time());
   }
   for (int i=0; i<(int)per_iter.size(); i++) {
-    printf(", %f", per_iter[i].total_time() / (double) num_iter);
+    double min = *min_element(per_iter_timings[i].begin(), per_iter_timings[i].end());
+    double max = *max_element(per_iter_timings[i].begin(), per_iter_timings[i].end());
+    printf(", %f (min %f)(max %f)", per_iter[i].total_time() / (double) num_iter, min, max);
   }
   if (seed != -1) {
     printf(", %ld", seed);
   }
   printf("\n");
+
+  // print out raw sample data
+  if (debug) {
+    printf("# run");
+    for (int i=0; i<(int)per_iter.size(); i++) {
+      printf(", %s", per_iter[i].get_name().c_str());
+    }
+    printf("\n");
+    for (int run=0; run<num_iter; run++) {
+      printf("%d", run);
+      for (int i=0; i<(int)per_iter_timings.size(); i++) {
+        printf(", %f", per_iter_timings[i][run]);
+      }
+      printf("\n");
+    }
+  }
 
   delete_params(p);
   return 0;

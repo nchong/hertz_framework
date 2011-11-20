@@ -38,17 +38,16 @@ class SimpleTimer {
       assert (_end.tv_nsec > 0);
       assert (_end.tv_nsec < 1000000000);
     };
-    inline void add_to_total() {
-      _total_time +=
+    inline double add_to_total() {
+      double delta =
         (double)(_end.tv_sec  - _start.tv_sec )*1.0e3 +
         (double)(_end.tv_nsec - _start.tv_nsec)/1.0e6;
-      //long seconds = _end.tv_sec - _start.tv_sec;
-      //long nseconds = _end.tv_nsec - _start.tv_nsec;
-      //_total_time += ((seconds*1000) + (nseconds/1000000.0));
+      _total_time += delta;
+      return delta;
     };
-    inline void stop_and_add_to_total() {
+    inline double stop_and_add_to_total() {
       stop();
-      add_to_total();
+      return add_to_total();
     };
     inline double total_time() { return _total_time; };
     inline void reset() { _total_time = 0.0; };

@@ -28,18 +28,22 @@ class SimpleTimer {
     inline void stop() {
       ASSERT_NO_CUDA_ERROR(cudaEventRecord(stop_event,0));
     }
-    inline void add_to_total() { _total_time+=time(); }
+    inline double add_to_total() {
+      double delta = time();
+      _total_time += delta;
+      return delta;
+    }
     inline double time() { 
       float timer;
       cudaThreadSynchronize();
       cudaEventSynchronize(stop_event);
       ASSERT_NO_CUDA_ERROR(
         cudaEventElapsedTime(&timer,start_event,stop_event));
-      return timer;
+      return (double)timer;
     }
-    inline void stop_and_add_to_total() {
+    inline double stop_and_add_to_total() {
       stop();
-      add_to_total();
+      return add_to_total();
     };
     inline double total_time() { return _total_time; };
     inline void reset() { _total_time = 0.0; };
