@@ -70,6 +70,9 @@ void print_usage(std::string progname) {
   printf("   -v         be verbose\n");
   printf("   -p arg     use partition file\n");
   printf("   -s arg     set seed for edge shuffle\n");
+  printf("   -x arg     set cl platform  ]            \n");
+  printf("   -y arg     set cl device    ] OpenCL only\n");
+  printf("   -z arg     set cl flags     ]            \n");
 }
 
 int main(int argc, char **argv) {
@@ -95,13 +98,15 @@ int main(int argc, char **argv) {
 
   // optional arguments
   bool debug = false;
-  bool verbose = false;
   int num_iter = 1000;
   std::string part_filename;
   long seed = -1;
+  p->verbose = false;
+  p->cl_platform = 0;
+  p->cl_device = 0;
 
   int c;
-  while ((c = getopt (argc, argv, "hdvn:p:s:")) != -1) {
+  while ((c = getopt (argc, argv, "hdvn:p:s:x:y:z:")) != -1) {
     switch (c) {
       case 'h':
         print_usage(progname);
@@ -110,7 +115,7 @@ int main(int argc, char **argv) {
         debug = true;
         break;
       case 'v':
-        verbose = true;
+        p->verbose = true;
         break;
       case 'n':
         num_iter = atoi(optarg);
@@ -123,6 +128,15 @@ int main(int argc, char **argv) {
         seed = atol(optarg);
         srandom(seed);
         shuffle_edges(p->edge, p->nedge);
+        break;
+      case 'x':
+        p->cl_platform = atoi(optarg);
+        break;
+      case 'y':
+        p->cl_device = atoi(optarg);
+        break;
+      case 'z':
+        p->cl_flags = optarg;
         break;
       case '?':
         if (optopt == 'n' || optopt == 'p' || optopt == 's')
@@ -142,13 +156,14 @@ int main(int argc, char **argv) {
   if (debug) {
     const char *sname = step_filename.c_str();
     const char *pname = part_filename.c_str();
-    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld\n",
-        sname, verbose, num_iter, pname, seed);
+    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld cl_platform=%d cl_device=%d cl_flags=[%s]\n",
+        sname, p->verbose, num_iter, pname, seed,
+        p->cl_platform, p->cl_device, p->cl_flags);
     for (int i=optind; i<argc; i++)
       printf ("# Non-option argument: %s\n", argv[i]);
   }
 
-  if (verbose) {
+  if (p->verbose) {
     printf("# Program: %s\n", progname.c_str());
     printf("# Num Iterations: %d\n", num_iter);
     if (p->npartition > 1) {
@@ -178,7 +193,7 @@ int main(int argc, char **argv) {
     per_iter_total += per_iter[i].total_time();
   }
 
-  if (verbose) { //then print header
+  if (p->verbose) { //then print header
     printf("# nedge, total_one_time_cost (milliseconds), time_per_iteration");
     for (int i=0; i<(int)one_time.size(); i++) {
       printf(", [%s]", one_time[i].get_name().c_str());

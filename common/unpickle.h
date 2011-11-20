@@ -42,6 +42,12 @@ struct params {
   double *expected_force;
   double *expected_torque;
   double *expected_shear;
+
+  //command-line arguments
+  bool  verbose;
+  int   cl_platform;
+  int   cl_device;
+  const char *cl_flags;
 };
 
 void print_params(struct params *p);
