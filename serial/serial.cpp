@@ -222,6 +222,7 @@ void run(struct params *input, int num_iter) {
   //--------------------
 
   per_iter.push_back(SimpleTimer("kernel"));
+  per_iter_timings.push_back(vector<double>(num_iter));
 
   //internal copies of outputs
   double *force = new double[input->nnode*3];
@@ -267,7 +268,8 @@ void run(struct params *input, int num_iter) {
         );
       }
     }
-    per_iter[0].stop_and_add_to_total();
+    double delta = per_iter[0].stop_and_add_to_total();
+    per_iter_timings[0][run] = delta;
 
 #ifdef TRACE
     if (run == 0) {
