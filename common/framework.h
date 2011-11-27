@@ -8,9 +8,12 @@
 #endif
 
 #include "unpickle.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <sched.h>
 #include <sstream>
 #include <string>
@@ -26,7 +29,7 @@ void print_usage(std::string progname);
 double percentage_error(double const&expected, double const &computed);
 double compare(const char *tag,
     double const&expected, double const&computed, const double threshold,
-    bool verbose, bool die_on_flag);
+    bool verbose, bool die_on_flag, std::ostream &out);
 void check_result(struct params *p, NeighListLike *nl,
     double *force, double *torque, double **shearlist,
     const double threshold=0.5, bool verbose=false, bool die_on_flag=true);
@@ -67,13 +70,17 @@ extern void run(struct params *input, int num_iter);
 void print_usage(std::string progname) {
   printf("Usage: %s <stepfile> [options]\n", progname.c_str());
   printf("Options:\n");
-  printf("   -n arg     number of runs\n");
-  printf("   -v         be verbose\n");
-  printf("   -p arg     use partition file\n");
-  printf("   -s arg     set seed for edge shuffle\n");
-  printf("   -x arg     set cl platform  ]            \n");
-  printf("   -y arg     set cl device    ] OpenCL only\n");
-  printf("   -z arg     set cl flags     ]            \n");
+  printf("   -n <int>     number of runs\n");
+  printf("   -v           be verbose\n");
+  printf("   -a <errfile> error output\n");
+  printf("   -b <rawfile> raw sample output\n");
+  printf("   -p <pfile>   use partition file\n");
+  printf("   -s <int>     set seed for edge shuffle\n");
+  printf("   -k TPA|BPA   set cl kernel    ]            \n");
+  printf("   -w <int>     set cl blocksize ]            \n");
+  printf("   -x <int>     set cl platform  ]            \n");
+  printf("   -y <int>     set cl device    ] OpenCL only\n");
+  printf("   -z <str>     set cl flags     ]            \n");
 }
 
 int main(int argc, char **argv) {
@@ -103,12 +110,23 @@ int main(int argc, char **argv) {
   std::string part_filename;
   long seed = -1;
   p->verbose = false;
+  p->errfile = NULL;
+  p->rawfile = NULL;
+  p->cl_kernel = 0;
+  p->cl_blocksize = 32;
   p->cl_platform = 0;
   p->cl_device = 0;
+  p->cl_flags = NULL;
 
   int c;
-  while ((c = getopt (argc, argv, "hdvn:p:s:x:y:z:")) != -1) {
+  while ((c = getopt (argc, argv, "a:b:hdvn:p:s:k:w:x:y:z:")) != -1) {
     switch (c) {
+      case 'a':
+        p->errfile = optarg;
+        break;
+      case 'b':
+        p->rawfile = optarg;
+        break;
       case 'h':
         print_usage(progname);
         return 1;
@@ -130,6 +148,18 @@ int main(int argc, char **argv) {
         srandom(seed);
         shuffle_edges(p->edge, p->nedge);
         break;
+      case 'k':
+        // use some magic values
+        if      (strcmp(optarg, "TPA") == 0) p->cl_kernel = 0;
+        else if (strcmp(optarg, "BPA") == 0) p->cl_kernel = 1;
+        else {
+          printf("Unknown kernel type [%s]\n", optarg);
+          return 1;
+        }
+        break;
+      case 'w':
+        p->cl_blocksize = atoi(optarg);
+        break;
       case 'x':
         p->cl_platform = atoi(optarg);
         break;
@@ -140,7 +170,10 @@ int main(int argc, char **argv) {
         p->cl_flags = optarg;
         break;
       case '?':
-        if (optopt == 'n' || optopt == 'p' || optopt == 's')
+        if (optopt == 'a' || optopt == 'b' ||
+            optopt == 'n' || optopt == 'p' || optopt == 's' ||
+            optopt == 'k' || optopt == 'w' ||
+            optopt == 'x' || optopt == 'y' || optopt == 'z')
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -157,8 +190,9 @@ int main(int argc, char **argv) {
   if (debug) {
     const char *sname = step_filename.c_str();
     const char *pname = part_filename.c_str();
-    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld cl_platform=%d cl_device=%d cl_flags=[%s]\n",
+    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld errfile=[%s] rawfile=[%s] cl_platform=%d cl_device=%d cl_flags=[%s]\n",
         sname, p->verbose, num_iter, pname, seed,
+        p->errfile, p->rawfile,
         p->cl_platform, p->cl_device, p->cl_flags);
     for (int i=optind; i<argc; i++)
       printf ("# Non-option argument: %s\n", argv[i]);
@@ -206,7 +240,7 @@ int main(int argc, char **argv) {
       printf(", [%s]", one_time[i].get_name().c_str());
     }
     for (int i=0; i<(int)per_iter.size(); i++) {
-      printf(", %s", per_iter[i].get_name().c_str());
+      printf(", %s, min, max", per_iter[i].get_name().c_str());
     }
     if (seed != -1) {
       printf(", seed");
@@ -222,7 +256,7 @@ int main(int argc, char **argv) {
   for (int i=0; i<(int)per_iter.size(); i++) {
     double min = *min_element(per_iter_timings[i].begin(), per_iter_timings[i].end());
     double max = *max_element(per_iter_timings[i].begin(), per_iter_timings[i].end());
-    printf(", %f (min %f)(max %f)", per_iter[i].total_time() / (double) num_iter, min, max);
+    printf(", %f, %f, %f", per_iter[i].total_time() / (double) num_iter, min, max);
   }
   if (seed != -1) {
     printf(", %ld", seed);
@@ -230,18 +264,20 @@ int main(int argc, char **argv) {
   printf("\n");
 
   // print out raw sample data
-  if (debug) {
-    printf("# run");
+  if (p->rawfile != NULL) {
+    std::ofstream fp;
+    fp.open(p->rawfile);
+    fp << "# run";
     for (int i=0; i<(int)per_iter.size(); i++) {
-      printf(", %s", per_iter[i].get_name().c_str());
+      fp << ", " << per_iter[i].get_name().c_str();
     }
-    printf("\n");
+    fp << std::endl;
     for (int run=0; run<num_iter; run++) {
-      printf("%d", run);
+      fp << run;
       for (int i=0; i<(int)per_iter_timings.size(); i++) {
-        printf(", %f", per_iter_timings[i][run]);
+        fp << ", " << per_iter_timings[i][run];
       }
-      printf("\n");
+      fp << std::endl;
     }
   }
 
@@ -260,7 +296,7 @@ double percentage_error(double const&expected, double const &computed) {
 
 double compare(const char *tag, double const&expected, double const&computed,
                const double threshold,
-               bool verbose, bool die_on_flag) {
+               bool verbose, bool die_on_flag, std::ostream &out) {
   static int num_bad = 0;
 
   double error = percentage_error(expected, computed);
@@ -269,7 +305,11 @@ double compare(const char *tag, double const&expected, double const&computed,
     num_bad++;
   }
   if (flag || verbose) {
-    printf("%s\t%e\t%e\t%e\t%d\n", tag, expected, computed, error, num_bad);
+    out << tag << ", "
+        << expected << ", "
+        << computed << ", "
+        << error 
+        << std::endl;
   }
   if (flag && die_on_flag) {
     exit(1);
@@ -280,19 +320,27 @@ double compare(const char *tag, double const&expected, double const&computed,
 void check_result(struct params *p, NeighListLike *nl,
                   double *force, double *torque, double **shearlist,
                   const double threshold, bool verbose, bool die_on_flag) {
+  std::ostream *out = &std::cout;
+  std::ofstream fp;
+  if (p->errfile != NULL) {
+    fp.open(p->errfile);
+    out = &fp;
+    verbose = true;
+  }
+  (*out).precision(std::numeric_limits<double>::digits10);
   for (int i=0; i<p->nnode*3; i++) {
     std::stringstream tag;
     tag << "force[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_force[i], force[i],
-            threshold, verbose, die_on_flag);
+            threshold, verbose, die_on_flag, *out);
   }
   for (int i=0; i<p->nnode*3; i++) {
     std::stringstream tag;
     tag << "torque[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_torque[i], torque[i],
-            threshold, verbose, die_on_flag);
+            threshold, verbose, die_on_flag, *out);
   }
   int ptr = 0;
   double *shear_check = new double[p->nedge*3];
@@ -312,7 +360,7 @@ void check_result(struct params *p, NeighListLike *nl,
     tag << "shear[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_shear[i], shear_check[i],
-            threshold, verbose, die_on_flag);
+            threshold, verbose, die_on_flag, *out);
   }
   delete[] shear_check;
 }

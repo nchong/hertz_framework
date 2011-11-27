@@ -44,9 +44,13 @@ struct params {
   double *expected_shear;
 
   //command-line arguments
-  bool  verbose;
-  int   cl_platform;
-  int   cl_device;
+  bool        verbose;
+  const char *errfile;
+  const char *rawfile;
+  int         cl_kernel;
+  int         cl_blocksize;
+  int         cl_platform;
+  int         cl_device;
   const char *cl_flags;
 };
 
