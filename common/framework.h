@@ -322,22 +322,26 @@ void check_result(struct params *p, NeighListLike *nl,
                   const double threshold, bool verbose, bool die_on_flag) {
   std::ostream *out = &std::cout;
   std::ofstream fp;
+  std::string taghead;
   if (p->errfile != NULL) {
     fp.open(p->errfile);
     out = &fp;
     verbose = true;
+    taghead = "";
+  } else {
+    taghead = "# ";
   }
   (*out).precision(std::numeric_limits<double>::digits10);
   for (int i=0; i<p->nnode*3; i++) {
     std::stringstream tag;
-    tag << "force[" << i << "]";
+    tag << taghead << "force[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_force[i], force[i],
             threshold, verbose, die_on_flag, *out);
   }
   for (int i=0; i<p->nnode*3; i++) {
     std::stringstream tag;
-    tag << "torque[" << i << "]";
+    tag << taghead << "torque[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_torque[i], torque[i],
             threshold, verbose, die_on_flag, *out);
@@ -357,7 +361,7 @@ void check_result(struct params *p, NeighListLike *nl,
   assert(ptr == p->nedge);
   for (int i=0; i<p->nedge; i++) {
     std::stringstream tag;
-    tag << "shear[" << i << "]";
+    tag << taghead << "shear[" << i << "]";
     compare(tag.str().c_str(),
             p->expected_shear[i], shear_check[i],
             threshold, verbose, die_on_flag, *out);
