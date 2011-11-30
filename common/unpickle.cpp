@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <limits>
 
 using namespace std;
 
 void print_params(struct params *p) {
   cout << "CONSTANTS" << endl;
+  cout.precision(numeric_limits<double>::digits10);
   cout << "dt = " << p->dt << endl;
   cout << "nktv2p = " << p->nktv2p << endl;
   cout << "ntype = " << p->ntype << endl;
@@ -41,13 +43,13 @@ inline void fill_array(std::ifstream &file, T *array, int num_elements) {
     exit(-1);
   }
   for (int i=0; i<num_elements; i++) {
-    file >> array[i];
+    file.read(reinterpret_cast<char *>(&(array[i])), sizeof(array[i]));
   }
 }
 
 //unpickle file
 struct params *parse_file(std::string fname) {
-  ifstream file (fname.c_str(), ifstream::in);
+  ifstream file (fname.c_str(), ifstream::in | ifstream::binary);
   if (!file.is_open()) {
     cout << "Could not open [" << fname << "]" << endl;
     exit(-1);
@@ -57,15 +59,23 @@ struct params *parse_file(std::string fname) {
     exit(-1);
   }
 
+  unsigned long EXPECTED_MAGIC = 0xDEADBEEF;
+  unsigned long MAGIC;
+  file.read(reinterpret_cast<char *>(&MAGIC), sizeof(MAGIC));
+  if (MAGIC != 0xDEADBEEF) {
+    printf("Error with file [%s]: magic number is [%lux]; expecting [%lux]\n", fname.c_str(), MAGIC, EXPECTED_MAGIC);
+    exit(-1);
+  }
+
   struct params *result = new params;
   int ntype;
   int nnode;
   int nedge;
 
   //constants
-  file >> result->dt;
-  file >> result->nktv2p;
-  file >> ntype; result->ntype = ntype;
+  file.read(reinterpret_cast<char *>(&(result->dt)), sizeof(result->dt));
+  file.read(reinterpret_cast<char *>(&(result->nktv2p)), sizeof(result->nktv2p));
+  file.read(reinterpret_cast<char *>(&(ntype)), sizeof(ntype)); result->ntype = ntype;
   result->yeff       = new double[ntype*ntype];
   result->geff       = new double[ntype*ntype];
   result->betaeff    = new double[ntype*ntype];
@@ -76,7 +86,7 @@ struct params *parse_file(std::string fname) {
   fill_array(file, result->coeffFrict, (ntype*ntype));
 
   //node data
-  file >> nnode; result->nnode = nnode;
+  file.read(reinterpret_cast<char *>(&(nnode)), sizeof(nnode)); result->nnode = nnode;
   result->x      = new double[nnode*3];
   result->v      = new double[nnode*3];
   result->omega  = new double[nnode*3];
@@ -95,7 +105,7 @@ struct params *parse_file(std::string fname) {
   fill_array(file, result->torque, nnode*3);
 
   //edge data
-  file >> nedge; result->nedge = nedge;
+  file.read(reinterpret_cast<char *>(&(nedge)), sizeof(nedge)); result->nedge = nedge;
   result->edge = new int[nedge*2];
   result->shear = new double[nedge*3];
   fill_array(file, result->edge,  nedge*2);
