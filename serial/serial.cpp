@@ -282,7 +282,7 @@ void run(struct params *input, int num_iter) {
 
     //only check results the first time around
     if (run == 0) {
-      check_result(input, nl, force, torque, firstdouble);
+      check_result(input, nl, force, torque, firstdouble, 0.5, false, false);
     }
   }
 
