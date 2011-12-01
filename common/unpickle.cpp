@@ -49,7 +49,8 @@ inline void fill_array(std::ifstream &file, T *array, int num_elements) {
 
 //unpickle file
 struct params *parse_file(std::string fname) {
-  ifstream file (fname.c_str(), ifstream::in | ifstream::binary);
+  const char *fname_c_str = fname.c_str();
+  ifstream file (fname_c_str, ifstream::in | ifstream::binary);
   if (!file.is_open()) {
     cout << "Could not open [" << fname << "]" << endl;
     exit(-1);
@@ -59,11 +60,11 @@ struct params *parse_file(std::string fname) {
     exit(-1);
   }
 
-  unsigned long EXPECTED_MAGIC = 0xDEADBEEF;
-  unsigned long MAGIC;
+  unsigned int EXPECTED_MAGIC = 0xDEADBEEF;
+  unsigned int MAGIC;
   file.read(reinterpret_cast<char *>(&MAGIC), sizeof(MAGIC));
   if (MAGIC != 0xDEADBEEF) {
-    printf("Error with file [%s]: magic number is [%lux]; expecting [%lux]\n", fname.c_str(), MAGIC, EXPECTED_MAGIC);
+    printf("Error with file [%s]: magic number is [%x]; expecting [%x]\n", fname.c_str(), MAGIC, EXPECTED_MAGIC);
     exit(-1);
   }
 

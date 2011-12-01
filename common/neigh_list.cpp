@@ -221,9 +221,9 @@ void NeighListLike::test_against(struct params *input) {
   for (int e=0; e<input->nedge; e++) {
     assert(edge[(e*2)  ] == input->edge[(e*2)  ]);
     assert(edge[(e*2)+1] == input->edge[(e*2)+1]);
-    assert(shear[(e*3)  ] == input->shear[(e*3)  ]);
-    assert(shear[(e*3)+1] == input->shear[(e*3)+1]);
-    assert(shear[(e*3)+2] == input->shear[(e*3)+2]);
+    assert(bitwise_equal(shear[(e*3)  ], input->shear[(e*3)  ]));
+    assert(bitwise_equal(shear[(e*3)+1], input->shear[(e*3)+1]));
+    assert(bitwise_equal(shear[(e*3)+2], input->shear[(e*3)+2]));
   }
   delete[] edge;
   delete[] shear;
@@ -269,3 +269,15 @@ void NeighListLike::copy_into(
     std::copy(tpages[p], tpages[p]+(pgsize  ), tpages_copy[p]);
   }
 }
+
+bool bitwise_equal(double const&d1, double const&d2) {
+  union udouble {
+    double d;
+    unsigned long u;
+  };
+
+  udouble ud1; ud1.d = d1;
+  udouble ud2; ud2.d = d2;
+  return (ud1.u == ud2.u);
+}
+

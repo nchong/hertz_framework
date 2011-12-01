@@ -3,22 +3,21 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
-void print_double_array(double *x, int len) {
-  for (int i=0; i<len; i++) {
-    printf("%.16f\n", x[i]);
-  }
-}
+using namespace std;
 
-void print_int_array(int *x, int len) {
+template <typename T>
+void print_array(ofstream &ofile, T *x, int len) {
   for (int i=0; i<len; i++) {
-    printf("%d\n", x[i]);
+    ofile.write(reinterpret_cast<char *>(&(x[i])), sizeof(x[i]));
   }
 }
 
 int main(int argc, char **argv) {
   std::string progname(argv[0]);
-  if (argc < 2) {
+  if (argc < 3) {
     return 1;
   }
   std::string step_filename(argv[1]);
@@ -41,61 +40,77 @@ int main(int argc, char **argv) {
   }
 
   //repickle
-  printf("%.16f\n", p->dt);
-  printf("%.16f\n", p->nktv2p);
-  printf("%d\n", p->ntype);
-  print_double_array(p->yeff, p->ntype*p->ntype);
-  print_double_array(p->geff, p->ntype*p->ntype);
-  print_double_array(p->betaeff, p->ntype*p->ntype);
-  print_double_array(p->coeffFrict, p->ntype*p->ntype);
+  ofstream ofile;
+  ofile.open(argv[2], ios::binary | ios::out);
 
-  printf("%d\n", p->nnode);
-  print_double_array(p->x, p->nnode*3);
-  print_double_array(p->v, p->nnode*3);
-  print_double_array(p->omega, p->nnode*3);
-  print_double_array(p->radius, p->nnode);
-  print_double_array(p->mass, p->nnode);
-  print_int_array(p->type, p->nnode);
-  print_double_array(p->force, p->nnode*3);
-  print_double_array(p->torque, p->nnode*3);
+  unsigned int MAGIC = 0xDEADBEEF;
+  ofile.write(reinterpret_cast<char *>(&MAGIC), sizeof(MAGIC));
 
-  printf("%d\n", p->nedge*2);
+  //CONSTANTS
+  ofile.write(reinterpret_cast<char *>(&(p->dt)), sizeof(p->dt));
+  ofile.write(reinterpret_cast<char *>(&(p->nktv2p)), sizeof(p->nktv2p));
+  ofile.write(reinterpret_cast<char *>(&(p->ntype)), sizeof(p->ntype));
+  print_array<double>(ofile, p->yeff, p->ntype*p->ntype);
+  print_array<double>(ofile, p->geff, p->ntype*p->ntype);
+  print_array<double>(ofile, p->betaeff, p->ntype*p->ntype);
+  print_array<double>(ofile, p->coeffFrict, p->ntype*p->ntype);
+
+  ofile.write(reinterpret_cast<char *>(&(p->nnode)), sizeof(p->nnode));
+  print_array<double>(ofile, p->x, p->nnode*3);
+  print_array<double>(ofile, p->v, p->nnode*3);
+  print_array<double>(ofile, p->omega, p->nnode*3);
+  print_array<double>(ofile, p->radius, p->nnode);
+  print_array<double>(ofile, p->mass, p->nnode);
+  print_array<int>(ofile, p->type, p->nnode);
+  print_array<double>(ofile, p->force, p->nnode*3);
+  print_array<double>(ofile, p->torque, p->nnode*3);
+
+  int new_nedge = p->nedge*2;
+  ofile.write(reinterpret_cast<char *>(&(new_nedge)), sizeof(new_nedge));
   int count = 0;
   for (int n=0; n<p->nnode; n++) {
     for (int i=0; i<adj[n].size(); i++) {
-      printf("%d\n", n);
-      printf("%d\n", adj[n][i]);
+      ofile.write(reinterpret_cast<char *>(&(n)), sizeof(n));
+      ofile.write(reinterpret_cast<char *>(&(adj[n][i])), sizeof(adj[n][i]));
       count++;
     }
   }
+
+  double nshear[3];
   assert(count == p->nedge*2);
   for (int n=0; n<p->nnode; n++) {
     for (int i=0; i<adj[n].size(); i++) {
       if (negate[n][i]) {
-        printf("%.16f\n", -(p->shear[(back[n][i]*3)+0]));
-        printf("%.16f\n", -(p->shear[(back[n][i]*3)+1]));
-        printf("%.16f\n", -(p->shear[(back[n][i]*3)+2]));
+        nshear[0] = -(p->shear[(back[n][i]*3)+0]);
+        nshear[1] = -(p->shear[(back[n][i]*3)+1]);
+        nshear[2] = -(p->shear[(back[n][i]*3)+2]);
       } else {
-        printf("%.16f\n", p->shear[(back[n][i]*3)+0]);
-        printf("%.16f\n", p->shear[(back[n][i]*3)+1]);
-        printf("%.16f\n", p->shear[(back[n][i]*3)+2]);
-     }
+        nshear[0] =  (p->shear[(back[n][i]*3)+0]);
+        nshear[1] =  (p->shear[(back[n][i]*3)+1]);
+        nshear[2] =  (p->shear[(back[n][i]*3)+2]);
+      }
+      ofile.write(reinterpret_cast<char *>(&(nshear[0])), sizeof(nshear[0]));
+      ofile.write(reinterpret_cast<char *>(&(nshear[1])), sizeof(nshear[1]));
+      ofile.write(reinterpret_cast<char *>(&(nshear[2])), sizeof(nshear[2]));
     }
   }
 
-  print_double_array(p->expected_force, p->nnode*3);
-  print_double_array(p->expected_torque, p->nnode*3);
+  print_array<double>(ofile, p->expected_force, p->nnode*3);
+  print_array<double>(ofile, p->expected_torque, p->nnode*3);
   for (int n=0; n<p->nnode; n++) {
     for (int i=0; i<adj[n].size(); i++) {
       if (negate[n][i]) {
-        printf("%.16f\n", -(p->expected_shear[(back[n][i]*3)+0]));
-        printf("%.16f\n", -(p->expected_shear[(back[n][i]*3)+1]));
-        printf("%.16f\n", -(p->expected_shear[(back[n][i]*3)+2]));
+        nshear[0] = -(p->expected_shear[(back[n][i]*3)+0]);
+        nshear[1] = -(p->expected_shear[(back[n][i]*3)+1]);
+        nshear[2] = -(p->expected_shear[(back[n][i]*3)+2]);
       } else {
-        printf("%.16f\n", p->expected_shear[(back[n][i]*3)+0]);
-        printf("%.16f\n", p->expected_shear[(back[n][i]*3)+1]);
-        printf("%.16f\n", p->expected_shear[(back[n][i]*3)+2]);
+        nshear[0] =  (p->expected_shear[(back[n][i]*3)+0]);
+        nshear[1] =  (p->expected_shear[(back[n][i]*3)+1]);
+        nshear[2] =  (p->expected_shear[(back[n][i]*3)+2]);
       }
+      ofile.write(reinterpret_cast<char *>(&(nshear[0])), sizeof(nshear[0]));
+      ofile.write(reinterpret_cast<char *>(&(nshear[1])), sizeof(nshear[1]));
+      ofile.write(reinterpret_cast<char *>(&(nshear[2])), sizeof(nshear[2]));
     }
   }
 

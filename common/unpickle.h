@@ -98,4 +98,6 @@ class NeighListLike {
     void test_against(struct params *input);
 };
 
+bool bitwise_equal(double const &d1, double const &d2);
+
 #endif
