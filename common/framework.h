@@ -264,6 +264,7 @@ int main(int argc, char **argv) {
     printf(", %ld", seed);
   }
   printf("\n");
+  fflush(stdout);
 
   // print out raw sample data
   if (p->rawfile != NULL) {
