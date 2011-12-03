@@ -205,6 +205,8 @@ void parse_partition_file(struct params *input, string fname) {
   //*edges* in the partition)
   input->partition_length =
     vector<int>(partition_length, partition_length + npartition);
+
+  file.close();
 }
 
 void delete_params(struct params *p) {

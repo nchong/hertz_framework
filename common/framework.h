@@ -3,6 +3,8 @@
 
 #ifdef GPU_TIMER
   #include "cuda_timer.h"
+#elif POSIX_TIMER
+  #include "posix_timer.h"
 #else
   #include "simple_timer.h"
 #endif
@@ -223,7 +225,7 @@ int main(int argc, char **argv) {
   // PRINT TIMING RESULTS
   assert(per_iter.size() == per_iter_timings.size());
   for (int i=0; i<(int)per_iter_timings.size(); i++) {
-    assert(per_iter_timings[i].size() == num_iter);
+    assert((int)per_iter_timings[i].size() == num_iter);
   }
   double one_time_total = 0.0f;
   double per_iter_total = 0.0f;
@@ -269,7 +271,7 @@ int main(int argc, char **argv) {
     fp.open(p->rawfile);
     fp << "# run";
     for (int i=0; i<(int)per_iter.size(); i++) {
-      fp << ", " << per_iter[i].get_name().c_str();
+      fp << ", " << per_iter[i].get_name();
     }
     fp << std::endl;
     for (int run=0; run<num_iter; run++) {
