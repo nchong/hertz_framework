@@ -11,14 +11,6 @@
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define DEBUG           //< add (i,j) index information to struct
 
-#ifdef GPU_TIMER
-  #include "cuda_timer.h"
-#elif POSIX_TIMER
-  #include "posix_timer.h"
-#else
-  #include "simple_timer.h"
-#endif
-
 #include "check_result_vector.h"
 #include "cuda_common.h"
 #include "framework.h"
