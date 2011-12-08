@@ -183,17 +183,21 @@ inline void pair_interaction(
     }
 #endif
 
+#ifndef _OPENMP // assumes full neighbor lists
     forcej[0] -= fx;
     forcej[1] -= fy;
     forcej[2] -= fz;
+#endif
 
     torquei[0] -= cri*tor1;
     torquei[1] -= cri*tor2;
     torquei[2] -= cri*tor3;
 
+#ifndef _OPENMP
     torquej[0] -= crj*tor1;
     torquej[1] -= crj*tor2;
     torquej[2] -= crj*tor3;
+#endif
   }
 }
 
@@ -238,6 +242,7 @@ void run(struct params *input, int num_iter) {
 #endif
 
     per_iter[0].start();
+    #pragma omp parallel for
     for (int ii=0; ii<nl->inum; ii++) {
       int i = nl->ilist[ii];
       for (int jj=0; jj<nl->numneigh[i]; jj++) {
