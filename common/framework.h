@@ -86,12 +86,14 @@ void print_usage(std::string progname) {
 }
 
 int main(int argc, char **argv) {
+#if 0
   // only run on main CPU
   cpu_set_t mask;
   CPU_ZERO(&mask);
   CPU_SET(0, &mask);
   int err = sched_setaffinity(0, sizeof(mask), &mask);
   assert(err == 0);
+#endif
 
   // PARSE CMDLINE
   std::string progname(argv[0]);

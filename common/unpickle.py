@@ -1,43 +1,51 @@
 #!/usr/bin/env python
 
+import struct
+
 class Params(object):
   def __init__(self, **kwds):
     self.__dict__.update(kwds)
 
 def parse_file(fname):
-  with open(fname, 'r') as f:
-    def get_scalar_array(convert, n):
-      return [convert(f.next()) for x in xrange(n)]
-    def get_vector_array(convert, n):
-      return [[convert(f.next()),
-               convert(f.next()),
-               convert(f.next())] for x in xrange(n)]
+  with open(fname, 'rb') as f:
+    nbytes_of_fmt = { '<i': 4, '<d': 8 }
+    def get_scalar_array(fmt, n):
+      return [ struct.unpack(fmt, f.read(nbytes_of_fmt[fmt]))[0] for x in xrange(n) ]
+    def get_vector_array(fmt, n):
+      return [[struct.unpack(fmt, f.read(nbytes_of_fmt[fmt]))[0],
+               struct.unpack(fmt, f.read(nbytes_of_fmt[fmt]))[0],
+               struct.unpack(fmt, f.read(nbytes_of_fmt[fmt]))[0]] for x in xrange(n)]
+    # magic number
+    EXPECTED_MAGIC = 0xDEADBEEF
+    magic, = struct.unpack('<I', f.read(4))
+    if magic != EXPECTED_MAGIC:
+      print "Error with file [%s]: magic number is [%x] expecting [%x]\n" % (fname, magic, EXPECTED_MAGIC)
+
     # constants
-    dt         = float(f.next())
-    nktv2p     = float(f.next())
-    ntype      = int(f.next())
-    yeff       = [float(f.next()) for x in xrange(ntype*ntype)]
-    geff       = [float(f.next()) for x in xrange(ntype*ntype)]
-    betaeff    = [float(f.next()) for x in xrange(ntype*ntype)]
-    coeffFrict = [float(f.next()) for x in xrange(ntype*ntype)]
+    dt, nktv2p = struct.unpack('<2d', f.read(16))
+    ntype,     = struct.unpack('<i', f.read(4))
+    yeff       = [ struct.unpack('<d', f.read(8))[0] for x in xrange(ntype*ntype)]
+    geff       = [ struct.unpack('<d', f.read(8))[0] for x in xrange(ntype*ntype)]
+    betaeff    = [ struct.unpack('<d', f.read(8))[0] for x in xrange(ntype*ntype)]
+    coeffFrict = [ struct.unpack('<d', f.read(8))[0] for x in xrange(ntype*ntype)]
     # per-particle data
-    nnode = int(f.next())
-    pos = get_vector_array(float, nnode)
-    v = get_vector_array(float, nnode)
-    omega = get_vector_array(float, nnode)
-    radius = get_scalar_array(float, nnode)
-    mass = get_scalar_array(float, nnode)
-    ty = get_scalar_array(int, nnode)
-    force = get_vector_array(float, nnode)
-    torque = get_vector_array(float, nnode)
+    nnode, = struct.unpack('<i', f.read(4))
+    pos = get_vector_array('<d', nnode)
+    v = get_vector_array('<d', nnode)
+    omega = get_vector_array('<d', nnode)
+    radius = get_scalar_array('<d', nnode)
+    mass = get_scalar_array('<d', nnode)
+    ty = get_scalar_array('<i', nnode)
+    force = get_vector_array('<d', nnode)
+    torque = get_vector_array('<d', nnode)
     # per-neighbor data
-    nedge = int(f.next())
-    edge = [(int(f.next()), int(f.next())) for x in xrange(nedge)]
-    shear = get_vector_array(float, nedge)
+    nedge = struct.unpack('<i', f.read(4))[0]
+    edge = [(struct.unpack('<i', f.read(4))[0], struct.unpack('<i', f.read(4))[0]) for x in xrange(nedge)]
+    shear = get_vector_array('<d', nedge)
     # expected results
-    expected_force = get_vector_array(float, nnode)
-    expected_torque = get_vector_array(float, nnode)
-    expected_shear = get_vector_array(float, nedge)
+    expected_force = get_vector_array('<d', nnode)
+    expected_torque = get_vector_array('<d', nnode)
+    expected_shear = get_vector_array('<d', nedge)
     return Params(dt=dt, nktv2p=nktv2p,
         ntype=ntype,
           yeff=yeff, geff=geff, betaeff=betaeff, coeffFrict=coeffFrict,
