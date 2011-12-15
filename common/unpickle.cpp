@@ -237,3 +237,94 @@ void delete_params(struct params *p) {
 
   delete p;
 }
+
+/*
+ * Artificially inflate the size of a parameter list
+ */
+void inflate(struct params *p, int k) {
+  // multiply out node data
+  int nnode = p->nnode*k;
+  double *x               = new double[nnode*3];
+  double *v               = new double[nnode*3];
+  double *omega           = new double[nnode*3];
+  double *radius          = new double[nnode];
+  double *mass            = new double[nnode];
+  int    *type            = new int[nnode];
+  double *force           = new double[nnode*3];
+  double *torque          = new double[nnode*3];
+  double *expected_force  = new double[nnode*3];
+  double *expected_torque = new double[nnode*3];
+  for (int i=0; i<k; i++) {
+    copy(p->x,               p->x              +(p->nnode*3), &x[i*p->nnode*3]);
+    copy(p->v,               p->v              +(p->nnode*3), &v[i*p->nnode*3]);
+    copy(p->omega,           p->omega          +(p->nnode*3), &omega[i*p->nnode*3]);
+    copy(p->radius,          p->radius         +(p->nnode),   &radius[i*p->nnode]);
+    copy(p->mass,            p->mass           +(p->nnode),   &mass[i*p->nnode]);
+    copy(p->type,            p->type           +(p->nnode),   &type[i*p->nnode]);
+    copy(p->force,           p->force          +(p->nnode*3), &force[i*p->nnode*3]);
+    copy(p->torque,          p->torque         +(p->nnode*3), &torque[i*p->nnode*3]);
+    copy(p->expected_force,  p->expected_force +(p->nnode*3), &expected_force[i*p->nnode*3]);
+    copy(p->expected_torque, p->expected_torque+(p->nnode*3), &expected_torque[i*p->nnode*3]);
+  }
+
+  // multiply out edge data
+  int nedge = p->nedge*k;
+  int    *edge           = new int[nedge*2];
+  double *shear          = new double[nedge*3];
+  double *expected_shear = new double[nedge*3];
+  for (int i=0; i<k; i++) {
+    copy(p->edge,           p->edge          +(p->nedge*2), &edge[i*p->nedge*2]);
+    copy(p->shear,          p->shear         +(p->nedge*3), &shear[i*p->nedge*3]);
+    copy(p->expected_shear, p->expected_shear+(p->nedge*3), &expected_shear[i*p->nedge*3]);
+  }
+  for (int i=1; i<k; i++) {
+    for (int e=0; e<p->nedge*2; e++) {
+      edge[(p->nedge*2*i)+e] += (p->nnode*i);
+    }
+  }
+#if 0 //paranoid
+  for (int i=0; i<p->nnode*3; i++) {
+    for (int j=1; j<k; j++) {
+      assert(x[i] == x[i+(j*p->nnode*3)]);
+    }
+  }
+  for (int i=0; i<p->nedge*2; i++) {
+    for (int j=1; j<k; j++) {
+      assert(edge[i] + (j*p->nnode) == edge[i+(j*p->nedge*2)]);
+    }
+  }
+#endif
+  delete[] p->x;
+  delete[] p->v;
+  delete[] p->omega;
+  delete[] p->radius;
+  delete[] p->mass;
+  delete[] p->type;
+  delete[] p->force;
+  delete[] p->torque;
+
+  delete[] p->edge;
+  delete[] p->shear;
+
+  delete[] p->expected_force;
+  delete[] p->expected_torque;
+  delete[] p->expected_shear;
+
+  p->nnode  = nnode;
+  p->x      = x;
+  p->v      = v;
+  p->omega  = omega;
+  p->radius = radius;
+  p->mass   = mass;
+  p->type   = type;
+  p->force  = force;
+  p->torque = torque;
+
+  p->nedge = nedge;
+  p->edge  = edge;
+  p->shear = shear;
+
+  p->expected_force  =  expected_force;
+  p->expected_torque = expected_torque;
+  p->expected_shear  = expected_shear;
+}

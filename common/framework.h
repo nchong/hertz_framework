@@ -76,6 +76,7 @@ void print_usage(std::string progname) {
   printf("   -v           be verbose\n");
   printf("   -a <errfile> error output\n");
   printf("   -b <rawfile> raw sample output\n");
+  printf("   -c <int>     inflate input data\n");
   printf("   -p <pfile>   use partition file\n");
   printf("   -s <int>     set seed for edge shuffle\n");
   printf("   -k TPA|BPA   set cl kernel    ]            \n");
@@ -110,6 +111,7 @@ int main(int argc, char **argv) {
 
   // optional arguments
   bool debug = false;
+  int x = 1;
   int num_iter = 1000;
   std::string part_filename;
   long seed = -1;
@@ -123,13 +125,16 @@ int main(int argc, char **argv) {
   p->cl_flags = NULL;
 
   int c;
-  while ((c = getopt (argc, argv, "a:b:hdvn:p:s:k:w:x:y:z:")) != -1) {
+  while ((c = getopt (argc, argv, "a:b:c:hdvn:p:s:k:w:x:y:z:")) != -1) {
     switch (c) {
       case 'a':
         p->errfile = optarg;
         break;
       case 'b':
         p->rawfile = optarg;
+        break;
+      case 'c':
+        x = atoi(optarg);
         break;
       case 'h':
         print_usage(progname);
@@ -194,10 +199,10 @@ int main(int argc, char **argv) {
   if (debug) {
     const char *sname = step_filename.c_str();
     const char *pname = part_filename.c_str();
-    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld errfile=[%s] rawfile=[%s] cl_platform=%d cl_device=%d cl_flags=[%s]\n",
+    printf ("# Command-line parsing: step_filename=%s verbose=%d num_iter=%d part_filename=%s seed=%ld errfile=[%s] rawfile=[%s] cl_platform=%d cl_device=%d cl_flags=[%s] x=%d\n",
         sname, p->verbose, num_iter, pname, seed,
         p->errfile, p->rawfile,
-        p->cl_platform, p->cl_device, p->cl_flags);
+        p->cl_platform, p->cl_device, p->cl_flags, x);
     for (int i=optind; i<argc; i++)
       printf ("# Non-option argument: %s\n", argv[i]);
   }
@@ -219,6 +224,10 @@ int main(int argc, char **argv) {
 #else
     printf("# CPU timer implementation\n");
 #endif
+  }
+
+  if (x > 1) {
+    inflate(p, x);
   }
 
   // RUN TEST

@@ -64,6 +64,8 @@ struct params *parse_file(std::string fname);
 
 void parse_partition_file(struct params *input, std::string fname);
 
+void inflate(struct params *p, int k);
+
 void delete_params(struct params *p);
 
 class NeighListLike {

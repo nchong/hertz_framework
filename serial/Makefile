@@ -11,4 +11,4 @@ serial_omp: serial.cpp $(OBJ)
 	$(CXX) $(CXXFLAGS) -openmp -openmp-report -I $(INCLUDEDIR) -D POSIX_TIMER -lrt $^ -o $@
 
 clean:
-	rm -f serial_posix_timer *.log *.data
+	rm -f serial_posix_timer serial_omp *.log *.data
