@@ -18,13 +18,13 @@
 //#define KERNEL_PRINT    //< debug printing in kernel
 //#define DEBUG           //< add (i,j) index information to struct
 
-#include "check_result_vector.h"
 #include "cuda_common.h"
 #include "framework.h"
 #include "hertz_constants.h"
 #include "pair_interaction.h"
 #include "inverse_map.h"
 #include <sstream>
+#include <iostream>
 
 using namespace std;
 
@@ -296,6 +296,10 @@ void run(struct params *input, int num_iter) {
   per_iter.push_back(SimpleTimer("compute_kernel"));
   per_iter.push_back(SimpleTimer("collect_kernel"));
   per_iter.push_back(SimpleTimer("result_fetch"));
+  per_iter_timings.push_back(vector<double>(num_iter));
+  per_iter_timings.push_back(vector<double>(num_iter));
+  per_iter_timings.push_back(vector<double>(num_iter));
+  per_iter_timings.push_back(vector<double>(num_iter));
 
   for (int run=0; run<num_iter; run++) {
     //PREPROCESSING
@@ -399,25 +403,33 @@ void run(struct params *input, int num_iter) {
     //CHECKING
     //only check results the first time around
     if (run == 0) {
+      double threshold = 0.5;
+      bool verbose = false;
+      bool die_on_flag = true;
+      ostream *fout = &cout;
+
       for (int n=0; n<input->nnode; n++) {
         std::stringstream out;
         out << "force[" << n << "]";
-        check_result_vector(
+        compare(
             out.str().c_str(),
-            &input->expected_force[(n*3)], &input->force[(n*3)]);
+            input->expected_force[(n*3)], input->force[(n*3)],
+            threshold, verbose, die_on_flag, *fout);
         out.str("");
 
         out << "torque[" << n << "]";
-        check_result_vector(
+        compare(
             out.str().c_str(),
-            &input->expected_torque[(n*3)], &input->torque[(n*3)]);
+            input->expected_torque[(n*3)], input->torque[(n*3)],
+            threshold, verbose, die_on_flag, *fout);
       }
       for (int n=0; n<input->nedge; n++) {
         stringstream out;
         out << "shear[" << n << "]";
-        check_result_vector(
+        compare(
             out.str().c_str(), 
-            &input->expected_shear[(n*3)], &input->shear[(n*3)]);
+            input->expected_shear[(n*3)], input->shear[(n*3)],
+            threshold, verbose, die_on_flag, *fout);
       }
     }
   }
