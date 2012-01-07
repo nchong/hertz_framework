@@ -15,6 +15,9 @@ NeighListLike::NeighListLike(struct params *input) {
 
   //test
   test_against(input);
+
+  //create clean original structures
+  backup();
 }
 
 NeighListLike::~NeighListLike() {
@@ -27,7 +30,11 @@ NeighListLike::~NeighListLike() {
     delete[] pages[p];
     delete[] dpages[p];
     delete[] tpages[p];
+    delete[] original_dpages[p];
+    delete[] original_tpages[p];
   }
+  delete[] original_dpages;
+  delete[] original_tpages;
   // nb: we free these because we malloc them (because we realloc them)
   free(pages);
   free(dpages);
@@ -227,6 +234,31 @@ void NeighListLike::test_against(struct params *input) {
   }
   delete[] edge;
   delete[] shear;
+}
+
+void NeighListLike::backup() {
+  original_dpages = (double **)malloc(sizeof(double*)*maxpage);
+  assert(original_dpages);
+  original_tpages = (int **)malloc(sizeof(int*)*maxpage);
+  assert(original_tpages);
+
+  for (int p=0; p<maxpage; p++) {
+    original_dpages[p] = new double[pgsize*3];
+    assert(original_dpages[p]);
+    original_tpages[p] = new int[pgsize];
+    assert(original_tpages[p]);
+  }
+  for (int p=0; p<maxpage; p++) {
+    std::copy(dpages[p], dpages[p]+(pgsize*3), original_dpages[p]);
+    std::copy(tpages[p], tpages[p]+(pgsize  ), original_tpages[p]);
+  }
+}
+
+void NeighListLike::restore() {
+  for (int p=0; p<maxpage; p++) {
+    std::copy(original_dpages[p], original_dpages[p]+(pgsize*3), dpages[p]);
+    std::copy(original_tpages[p], original_tpages[p]+(pgsize  ), tpages[p]);
+  }
 }
 
 void NeighListLike::copy_into(

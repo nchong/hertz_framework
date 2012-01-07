@@ -223,16 +223,16 @@ void run(struct params *input, int num_iter) {
   //internal copies of outputs
   double *force = new double[input->nnode*3];
   double *torque = new double[input->nnode*3];
-  double **firstdouble = NULL;
-  double **dpages = NULL;
-  int    **firsttouch = NULL;
-  int    **tpages = NULL;
+  double **firstdouble = nl->firstdouble;
+  double **dpages = nl->dpages;
+  int    **firsttouch = nl->firsttouch;
+  int    **tpages = nl->tpages;
 
   for (int run=0; run<num_iter; run++) {
     //make copies
     copy(input->force,  input->force  + input->nnode*3, force);
     copy(input->torque, input->torque + input->nnode*3, torque);
-    nl->copy_into(firstdouble, dpages, firsttouch, tpages);
+    nl->restore();
 
 #ifdef TRACE
     if (run == 0) {
@@ -277,16 +277,9 @@ void run(struct params *input, int num_iter) {
     }
 #endif
 
-    //only check results the first time around
-    if (run == 0) {
-      check_result(input, nl, force, torque, firstdouble, 0.5, false, false);
-    }
+    check_result(input, nl, force, torque, firstdouble, 0.5, false, false);
   }
 
   delete[] force;
   delete[] torque;
-  delete[] firstdouble;
-  delete[] dpages;
-  delete[] firsttouch;
-  delete[] tpages;
 }

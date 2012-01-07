@@ -91,6 +91,7 @@ class NeighListLike {
     double **dpages;
     int    **tpages;
 
+    void restore();
     void copy_into(double **&, double **&, int **&, int **&);
 
   private:
@@ -98,6 +99,10 @@ class NeighListLike {
     void add_pages();
     void fill(struct params *input);
     void test_against(struct params *input);
+
+    double **original_dpages;
+    int    **original_tpages;
+    void backup();
 };
 
 bool bitwise_equal(double const &d1, double const &d2);
