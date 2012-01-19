@@ -4,6 +4,7 @@
 #include "framework.h"
 
 #ifdef TRACE
+#warning TRACE enabled: timing will not be accurate
 #include "cuPrintf.cu"
 #endif
 
@@ -335,7 +336,8 @@ void run(struct params *input, int num_iter) {
     cudaMemcpy(d_x,     input->x,     NLEN(double,3), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v,     input->v,     NLEN(double,3), cudaMemcpyHostToDevice);
     cudaMemcpy(d_omega, input->omega, NLEN(double,3), cudaMemcpyHostToDevice);
-    per_iter[0].stop_and_add_to_total();
+    double d0 = per_iter[0].stop_and_add_to_total();
+    per_iter_timings[0][run] = d0;
 
     //TODO: check if realloc of unpacked ij data necessary
     per_iter[1].start();
@@ -347,7 +349,8 @@ void run(struct params *input, int num_iter) {
       d_v,     d_vi,          d_vj,
       d_omega, d_omegai,      d_omegaj
     );
-    per_iter[1].stop_and_add_to_total();
+    double d1 = per_iter[1].stop_and_add_to_total();
+    per_iter_timings[1][run] = d1;
 
     per_iter[2].start();
 #ifdef TRACE
@@ -370,7 +373,8 @@ void run(struct params *input, int num_iter) {
       d_tdeltai,     d_tdeltaj,
       d_nl->d_shear
     );
-    per_iter[2].stop_and_add_to_total();
+    double d2 = per_iter[2].stop_and_add_to_total();
+    per_iter_timings[2][run] = d2;
 #ifdef TRACE
     cudaPrintfDisplay(stdout, true);
     cudaPrintfEnd();
@@ -387,13 +391,15 @@ void run(struct params *input, int num_iter) {
 #endif
       d_force,
       d_torque);
-    per_iter[3].stop_and_add_to_total();
+    double d3 = per_iter[3].stop_and_add_to_total();
+    per_iter_timings[3][run] = d3;
 
     per_iter[4].start();
     cudaMemcpy(force,  d_force,  NLEN(double,3), cudaMemcpyDeviceToHost);
     cudaMemcpy(torque, d_torque, NLEN(double,3), cudaMemcpyDeviceToHost);
     d_nl->unload_shear(nl->dpages);
-    per_iter[4].stop_and_add_to_total();
+    double d4 = per_iter[4].stop_and_add_to_total();
+    per_iter_timings[4][run] = d4;
 
     check_result(input, nl, force, torque, nl->firstdouble,
       /*threshold=*/0.5,
