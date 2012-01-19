@@ -1,4 +1,18 @@
-# COMPILE OPTIONS
+# ---------------------------------------------------------------------------
+# BUILD OPTIONS
+# ---------------------------------------------------------------------------
+
+# MAX_GRID_DIM should be the maximum number of allocatable threads in the grid's x dimension.
+# This is required to determine when to spill into using a 2D grid and is device (and kernel) specific.
+# Use deviceQuery (in the nvidia SDK) to help determine this value.
+# Otherwise, 65535 is probably sensible (for compute capability >= 2.0).
+MAX_GRID_DIM = 65535
+
+# CUDA_ARCH is the nvidia architecture of your device.
+CUDA_ARCH = sm_20
+# ---------------------------------------------------------------------------
+
+# COMPILER
 ifeq ($(CXX), icc)
 CXX = icc
 override CXXFLAGS += -O2
@@ -6,37 +20,36 @@ override CXXFLAGS += -Wall -Wcheck
 else
 CXX = g++
 override CXXFLAGS += -O2
-override CXXFLAGS += -Wall -Wextra -Werror -pedantic -Wno-variadic-macros
+override CXXFLAGS += -Wall -Wextra -Werror -pedantic
 endif
-LOG_LEVEL = LOG_WARN
-override CXXFLAGS += -DLOG_LEVEL=$(LOG_LEVEL)
 override CXXFLAGS += -fPIC
 
-NVCC = nvcc
-NVCCFLAGS = -arch=sm_13 #-O2
-NVCCFLAGS += ${CMDLINE_NVCCFLAGS}
+NVCC = $(CUDADIR)/bin/nvcc
+override NVCCFLAGS += -O2 -arch $(CUDA_ARCH)
+override NVCCFLAGS += -Xcompiler "-Wall -fPIC"
+override NVCCFLAGS += -DMAX_GRID_DIM=$(MAX_GRID_DIM)
 
-# OPENCL LIBRARIES BASED ON OS
+# CUDA
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-OPENCL_LIB = -framework OpenCL
-OPENCL_INC =
 SHARED = -dynamiclib
 endif
-
 ifeq ($(UNAME), Linux)
-.PHONY: .check-env
-AMDAPP ?= /opt/AMDAPP/include
-.check-env:
-	@if [ ! -d "${AMDAPP}" ]; then \
-		echo "ERROR: set AMDAPP variable."; exit 1; \
-	fi
-OPENCL_LIB = -lOpenCL 
-OPENCL_INC = -I ${AMDAPP}
 SHARED = -shared
 endif
+.PHONY: .check-cuda-env
+.check-cuda-env:
+	@if [ ! -d "$(CUDADIR)" ]; then \
+		echo "ERROR: set CUDADIR variable."; exit 1; \
+	fi
+CUDA_LIB = -L$(CUDADIR)/lib64 -lcuda -lcudart
+CUDA_INC = -I $(CUDADIR)/include
+all: .check-cuda-env
 
 INCLUDEDIR = ../common
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+%.o: %.cu
+	$(NVCC) $(NVCCFLAGS) -c -o $@ $<

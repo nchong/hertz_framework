@@ -224,9 +224,7 @@ void run(struct params *input, int num_iter) {
   double *force = new double[input->nnode*3];
   double *torque = new double[input->nnode*3];
   double **firstdouble = nl->firstdouble;
-  double **dpages = nl->dpages;
   int    **firsttouch = nl->firsttouch;
-  int    **tpages = nl->tpages;
 
   for (int run=0; run<num_iter; run++) {
     //make copies
