@@ -331,6 +331,7 @@ void run(struct params *input, int num_iter) {
     cudaMemset(d_tdeltai, 0, KLEN(double,3));
     cudaMemset(d_tdeltaj, 0, KLEN(double,3));
     nl->restore();
+    d_nl->load_shear(nl->dpages);
 
     per_iter[0].start();
     cudaMemcpy(d_x,     input->x,     NLEN(double,3), cudaMemcpyHostToDevice);
