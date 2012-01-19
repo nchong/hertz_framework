@@ -22,6 +22,7 @@
 #include <vector>
 
 std::vector<SimpleTimer> one_time;
+std::vector<SimpleTimer> nl_refresh;
 std::vector<SimpleTimer> per_iter;
 std::vector<std::vector<double> > per_iter_timings;
 
