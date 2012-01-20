@@ -162,6 +162,15 @@ double *d_force;  double *d_fdelta;
 double *d_torque; double *d_tdeltai; double *d_tdeltaj;
 //                        d_shear in d_nl
 
+void no_cuda_error(const char *errmsg) {
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    printf("[ERROR] %s\n", errmsg);
+    printf("[ERROR] %s\n", cudaGetErrorString(err));
+    exit(1);
+  }
+}
+
 #define NLEN(type,arity) (nparticles*arity*sizeof(type))
 #define KLEN(type,arity) (nneighbors*arity*sizeof(type))
 void init_dev_structures(int nparticles, int nneighbors) {
@@ -245,8 +254,8 @@ void run(struct params *input, int num_iter) {
 #if DEBUG
   printf("block_size = %d\n", block_size);
   printf("nparticles = %d\n", nparticles);
-  printf("nneighbors = %d (maxpage=%d, pgsize=%d)\n",
-    nneighbors, nl->maxpage, nl->pgsize);
+  printf("nneighbors = %d -> %d (maxpage=%d, pgsize=%d)\n",
+    input->nedge, nneighbors, nl->maxpage, nl->pgsize);
   printf("tpa_grid   = { %d, %d, %d }\n",
     tpa_grid_size.x, tpa_grid_size.y, tpa_grid_size.z);
   printf("tpn_grid   = { %d, %d, %d }\n",
@@ -258,6 +267,7 @@ void run(struct params *input, int num_iter) {
   one_time.back().start();
   setup_hertz_constants(input);
   one_time.back().stop_and_add_to_total();
+  no_cuda_error("hertz_constants");
 
   one_time.push_back(SimpleTimer("init_nl"));
   one_time.back().start();
@@ -266,17 +276,20 @@ void run(struct params *input, int num_iter) {
     input->nnode,
     nl->maxpage, nl->pgsize);
   one_time.back().stop_and_add_to_total();
+  no_cuda_error("init_nl");
 
   one_time.push_back(SimpleTimer("malloc"));
   one_time.back().start();
   init_dev_structures(nparticles, nneighbors);
   one_time.back().stop_and_add_to_total();
+  no_cuda_error("init_dev_structures");
 
   one_time.push_back(SimpleTimer("memcpy"));
   one_time.back().start();
   cudaMemcpy(d_force,  input->force,  NLEN(double,3), cudaMemcpyHostToDevice);
   cudaMemcpy(d_torque, input->torque, NLEN(double,3), cudaMemcpyHostToDevice);
   one_time.back().stop_and_add_to_total();
+  no_cuda_error("memcpy");
 
   //NL-REFRESH COSTS
   nl_refresh.push_back(SimpleTimer("nl_reload"));
@@ -289,6 +302,7 @@ void run(struct params *input, int num_iter) {
     nl->dpages,
     nl->tpages);
   nl_refresh.back().stop_and_add_to_total();
+  no_cuda_error("nl_reload");
 
   nl_refresh.push_back(SimpleTimer("memcpy_unpack"));
   nl_refresh.back().start();
@@ -296,6 +310,7 @@ void run(struct params *input, int num_iter) {
   cudaMemcpy(d_mass,   input->mass,   NLEN(double,1), cudaMemcpyHostToDevice);
   cudaMemcpy(d_type,   input->type,   NLEN(int,1),    cudaMemcpyHostToDevice);
   nl_refresh.back().stop_and_add_to_total();
+  no_cuda_error("memcpy_unpack");
 
   nl_refresh.push_back(SimpleTimer("unpack_ro"));
   nl_refresh.back().start();
@@ -308,6 +323,7 @@ void run(struct params *input, int num_iter) {
     d_type,   d_typei,       d_typej
   );
   nl_refresh.back().stop_and_add_to_total();
+  no_cuda_error("unpack_ro");
 
   // PER-ITER COSTS
   per_iter.push_back(SimpleTimer("memcpy_reload"));
@@ -332,6 +348,7 @@ void run(struct params *input, int num_iter) {
     cudaMemset(d_tdeltaj, 0, KLEN(double,3));
     nl->restore();
     d_nl->load_shear(nl->dpages);
+    no_cuda_error("make_copies");
 
     per_iter[0].start();
     cudaMemcpy(d_x,     input->x,     NLEN(double,3), cudaMemcpyHostToDevice);
@@ -339,6 +356,7 @@ void run(struct params *input, int num_iter) {
     cudaMemcpy(d_omega, input->omega, NLEN(double,3), cudaMemcpyHostToDevice);
     double d0 = per_iter[0].stop_and_add_to_total();
     per_iter_timings[0][run] = d0;
+    no_cuda_error("memcpy_reload");
 
     //TODO: check if realloc of unpacked ij data necessary
     per_iter[1].start();
@@ -352,6 +370,7 @@ void run(struct params *input, int num_iter) {
     );
     double d1 = per_iter[1].stop_and_add_to_total();
     per_iter_timings[1][run] = d1;
+    no_cuda_error("unpack_reload");
 
     per_iter[2].start();
 #ifdef TRACE
@@ -376,6 +395,7 @@ void run(struct params *input, int num_iter) {
     );
     double d2 = per_iter[2].stop_and_add_to_total();
     per_iter_timings[2][run] = d2;
+    no_cuda_error("compute");
 #ifdef TRACE
     cudaPrintfDisplay(stdout, true);
     cudaPrintfEnd();
@@ -394,6 +414,7 @@ void run(struct params *input, int num_iter) {
       d_torque);
     double d3 = per_iter[3].stop_and_add_to_total();
     per_iter_timings[3][run] = d3;
+    no_cuda_error("collect");
 
     per_iter[4].start();
     cudaMemcpy(force,  d_force,  NLEN(double,3), cudaMemcpyDeviceToHost);
@@ -401,6 +422,7 @@ void run(struct params *input, int num_iter) {
     d_nl->unload_shear(nl->dpages);
     double d4 = per_iter[4].stop_and_add_to_total();
     per_iter_timings[4][run] = d4;
+    no_cuda_error("memcpy_results");
 
     check_result(input, nl, force, torque, nl->firstdouble,
       /*threshold=*/0.5,
@@ -410,5 +432,6 @@ void run(struct params *input, int num_iter) {
   delete[] force;
   delete[] torque;
   free_dev_structures();
+  no_cuda_error("free_dev_structures");
 }
 
