@@ -326,6 +326,7 @@ void run(struct params *input, int num_iter) {
     d_mass,   d_massi,       d_massj,
     d_type,   d_typei,       d_typej
   );
+  cudaThreadSynchronize();
   nl_refresh.back().stop_and_add_to_total();
   no_cuda_error("unpack_ro");
 
@@ -354,6 +355,8 @@ void run(struct params *input, int num_iter) {
     d_nl->load_shear(nl->dpages);
     no_cuda_error("make_copies");
 
+    end_to_end.start();
+
     per_iter[0].start();
     cudaMemcpy(d_x,     input->x,     NLEN(double,3), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v,     input->v,     NLEN(double,3), cudaMemcpyHostToDevice);
@@ -372,6 +375,7 @@ void run(struct params *input, int num_iter) {
       d_v,     d_vi,          d_vj,
       d_omega, d_omegai,      d_omegaj
     );
+    cudaThreadSynchronize();
     double d1 = per_iter[1].stop_and_add_to_total();
     per_iter_timings[1][run] = d1;
     no_cuda_error("unpack_reload");
@@ -397,6 +401,7 @@ void run(struct params *input, int num_iter) {
       d_tdeltai,     d_tdeltaj,
       d_nl->d_shear
     );
+    cudaThreadSynchronize();
     double d2 = per_iter[2].stop_and_add_to_total();
     per_iter_timings[2][run] = d2;
     no_cuda_error("compute");
@@ -416,6 +421,7 @@ void run(struct params *input, int num_iter) {
 #endif
       d_force,
       d_torque);
+    cudaThreadSynchronize();
     double d3 = per_iter[3].stop_and_add_to_total();
     per_iter_timings[3][run] = d3;
     no_cuda_error("collect");
@@ -427,6 +433,9 @@ void run(struct params *input, int num_iter) {
     double d4 = per_iter[4].stop_and_add_to_total();
     per_iter_timings[4][run] = d4;
     no_cuda_error("memcpy_results");
+
+    double d5 = end_to_end.stop_and_add_to_total();
+    end_to_end_timings.push_back(d5);
 
     check_result(input, nl, force, torque, nl->firstdouble,
       /*threshold=*/0.5,

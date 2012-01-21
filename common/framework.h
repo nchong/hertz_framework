@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+SimpleTimer end_to_end;
+std::vector<double> end_to_end_timings;
 std::vector<SimpleTimer> one_time;
 std::vector<SimpleTimer> nl_refresh;
 std::vector<SimpleTimer> per_iter;
@@ -250,8 +252,14 @@ int main(int argc, char **argv) {
 
   if (p->verbose) { //then print header
     printf("# nedge, total_one_time_cost (milliseconds), time_per_iteration");
+    if ((int)end_to_end_timings.size() == num_iter) {
+      printf(", end-to-end");
+    }
     for (int i=0; i<(int)one_time.size(); i++) {
       printf(", [%s]", one_time[i].get_name().c_str());
+    }
+    for (int i=0; i<(int)nl_refresh.size(); i++) {
+      printf(", (%s)", nl_refresh[i].get_name().c_str());
     }
     for (int i=0; i<(int)per_iter.size(); i++) {
       printf(", %s, min, max", per_iter[i].get_name().c_str());
@@ -264,8 +272,19 @@ int main(int argc, char **argv) {
 
   // print runtime data
   printf("%d, %f, %f", p->nedge, one_time_total, per_iter_total / (double) num_iter);
+  if ((int)end_to_end_timings.size() == num_iter) {
+    double avg = 0.0;
+    for (int i=0; i<num_iter; i++) {
+      avg += end_to_end_timings[i];
+    }
+    avg /= num_iter;
+    printf(", %f", avg);
+  }
   for (int i=0; i<(int)one_time.size(); i++) {
     printf(", %f", one_time[i].total_time());
+  }
+  for (int i=0; i<(int)nl_refresh.size(); i++) {
+    printf(", %f", nl_refresh[i].total_time());
   }
   for (int i=0; i<(int)per_iter.size(); i++) {
     double min = *min_element(per_iter_timings[i].begin(), per_iter_timings[i].end());
