@@ -166,7 +166,11 @@ void no_cuda_error(const char *errmsg) {
   cudaError_t err = cudaGetLastError();
   if (err != cudaSuccess) {
     printf("[ERROR] %s\n", errmsg);
-    printf("[ERROR] %s\n", cudaGetErrorString(err));
+    printf("[ERROR] %d: %s\n", err, cudaGetErrorString(err));
+    size_t free; size_t total;
+    if (cudaMemGetInfo(&free, &total) == cudaSuccess) {
+      printf("[ERROR] mem free=%zubytes total=%zubytes\n", free, total);
+    }
     exit(1);
   }
 }
