@@ -135,13 +135,13 @@ __global__ void collect(
       tsum[1] += tdeltaj[(idx*3)+1];
       tsum[2] += tdeltaj[(idx*3)+2];
     }
+#endif
     force[(gid*3)]    += fsum[0];
     force[(gid*3)+1]  += fsum[1];
     force[(gid*3)+2]  += fsum[2];
     torque[(gid*3)]   += tsum[0];
     torque[(gid*3)+1] += tsum[1];
     torque[(gid*3)+2] += tsum[2];
-#endif
   }
 }
 
