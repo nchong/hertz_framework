@@ -38,4 +38,4 @@ tpn_full: driver.cu $(OBJ)
 	$(NVCC) $(NVCCFLAGS)          -DTPN -DPOSIX_TIMER -I $(INCLUDEDIR) $(EXTRAINC) driver.cu -o $@ $(EXTRALIB) -lrt
 
 clean:
-	rm -f tpn_half
+	rm -f tpn_half tpn_full
