@@ -345,18 +345,19 @@ void run(struct params *input, int num_iter) {
   double *torque = new double[nparticles*3];
   for (int run=0; run<num_iter; run++) {
     //make copies
-    cudaMemcpy(d_force,  input->force,  NLEN(double,3), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_torque, input->torque, NLEN(double,3), cudaMemcpyHostToDevice);
     nl->restore();
     d_nl->load_shear(nl->dpages);
     no_cuda_error("make_copies");
 
     end_to_end.start();
 
+    //load data onto device
     per_iter[0].start();
-    cudaMemcpy(d_x,     input->x,     NLEN(double,3), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_v,     input->v,     NLEN(double,3), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_omega, input->omega, NLEN(double,3), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_x,      input->x,      NLEN(double,3), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_v,      input->v,      NLEN(double,3), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_omega,  input->omega,  NLEN(double,3), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_force,  input->force,  NLEN(double,3), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_torque, input->torque, NLEN(double,3), cudaMemcpyHostToDevice);
     double d0 = per_iter[0].stop_and_add_to_total();
     per_iter_timings[0][run] = d0;
     no_cuda_error("memcpy_reload");
@@ -430,10 +431,11 @@ void run(struct params *input, int num_iter) {
     per_iter_timings[4][run] = d4;
     no_cuda_error("collect");
 
+    //offload data from device
+    //(see note on shear history below)
     per_iter[5].start();
     cudaMemcpy(force,  d_force,  NLEN(double,3), cudaMemcpyDeviceToHost);
     cudaMemcpy(torque, d_torque, NLEN(double,3), cudaMemcpyDeviceToHost);
-    d_nl->unload_shear(nl->dpages);
     double d5 = per_iter[5].stop_and_add_to_total();
     per_iter_timings[5][run] = d5;
     no_cuda_error("memcpy_results");
@@ -441,6 +443,9 @@ void run(struct params *input, int num_iter) {
     double d6 = end_to_end.stop_and_add_to_total();
     end_to_end_timings.push_back(d6);
 
+    //NB: we assume that shear history is *not* required from the device
+    //so this cost is not included in "memcpy_results"
+    d_nl->unload_shear(nl->dpages);
     check_result(input, nl, force, torque, nl->firstdouble,
       /*threshold=*/0.5,
       /*verbose=*/false,
